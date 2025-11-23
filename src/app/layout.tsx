@@ -21,9 +21,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <div className="flex min-h-screen bg-background-light">
           <Sidebar />
-          <main className="flex-1 ml-64 overflow-y-auto">
+          <main className="flex-1 ml-64 flex flex-col overflow-hidden">
             <HeaderBar />
-            <div className="p-6">
+            <div className="flex-1 overflow-y-auto p-6">
               {children}
             </div>
           </main>
