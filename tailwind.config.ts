@@ -2,9 +2,8 @@ import type { Config } from 'tailwindcss'
 
 const config: Config = {
   content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{ts,tsx}',
+    './src/components/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {
@@ -21,7 +20,10 @@ const config: Config = {
         DEFAULT: "0.5rem",
         lg: "0.75rem",
         xl: "1rem"
-      }
+      },
+      boxShadow: {
+        soft: "0 4px 10px rgba(0,0,0,0.04)",
+      },
     },
   },
   plugins: [],

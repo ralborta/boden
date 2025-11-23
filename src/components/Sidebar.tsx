@@ -35,7 +35,7 @@ export default function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 isActive
-                  ? 'bg-primary text-white'
+                  ? 'bg-background-light border-l-4 border-primary text-primary'
                   : 'text-subtext-light hover:bg-background-light hover:text-text-light'
               }`}
             >
@@ -50,11 +50,11 @@ export default function Sidebar() {
       <div className="p-4 border-t border-border-light">
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
-            JD
+            RA
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text-light truncate">John Doe</p>
-            <p className="text-xs text-subtext-light truncate">john@example.com</p>
+            <p className="text-sm font-medium text-text-light truncate">Raúl Alborta</p>
+            <p className="text-xs text-subtext-light truncate">Admin</p>
           </div>
         </div>
       </div>

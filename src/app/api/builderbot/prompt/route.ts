@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
     console.error('Error in GET /api/builderbot/prompt:', error)
     // Retornar prompt mock si la API no está disponible
     return NextResponse.json({
-      prompt: 'Eres un asistente virtual amigable y profesional. Ayuda a los usuarios con sus consultas de manera clara y concisa.',
+      content: 'Eres un asistente virtual amigable y profesional. Ayuda a los usuarios con sus consultas de manera clara y concisa.',
+      updatedAt: new Date().toISOString(),
     })
   }
 }
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
   let prompt = ''
   try {
     const body = await request.json()
-    prompt = body.prompt || ''
+    prompt = body.content || body.prompt || ''
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ content: prompt }),
     })
 
     if (!response.ok) {
@@ -53,7 +54,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error in POST /api/builderbot/prompt:', error)
     // Simular éxito si la API no está disponible
-    return NextResponse.json({ success: true, prompt })
+    return NextResponse.json({
+      content: prompt,
+      updatedAt: new Date().toISOString(),
+    })
   }
 }
 
