@@ -35,7 +35,3 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# backend api
-api/dist/
-api/node_modules/
-
