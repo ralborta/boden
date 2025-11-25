@@ -429,10 +429,8 @@ export async function getConversations(): Promise<WhatsAppConversation[]> {
 
 async function getRedisConversations(): Promise<WhatsAppConversation[]> {
   if (!redis) return []
-  const raw = await redis.hvals(CONVERSATIONS_KEY)
-  return raw
-    .map((value) => (typeof value === 'string' ? value : String(value)))
-    .map((value) => JSON.parse(value) as WhatsAppConversation)
+  const raw = (await redis.hvals(CONVERSATIONS_KEY)) as string[]
+  return raw.map((value) => JSON.parse(value) as WhatsAppConversation)
 }
 
 function getMemoryConversations(): WhatsAppConversation[] {
@@ -446,11 +444,8 @@ export async function getMessages(conversationId: string): Promise<WhatsAppMessa
 
 async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage[]> {
   if (!redis) return []
-  const raw = await redis.lrange(getMessagesKey(conversationId), 0, -1)
-  return raw
-    .map((value) => (typeof value === 'string' ? value : value ? String(value) : null))
-    .filter((value): value is string => Boolean(value))
-    .map((value) => JSON.parse(value) as WhatsAppMessage)
+  const raw = (await redis.lrange(getMessagesKey(conversationId), 0, -1)) as string[]
+  return raw.map((value) => JSON.parse(value) as WhatsAppMessage)
 }
 
 function getMemoryMessages(conversationId: string): WhatsAppMessage[] {
@@ -534,7 +529,7 @@ export async function resetWhatsAppStore() {
   memorySeeded = false
 
   if (redis) {
-    const messageIds = await redis.smembers<string>(MESSAGE_INDEX_KEY)
+    const messageIds = (await redis.smembers(MESSAGE_INDEX_KEY)) as string[]
     const messageKeys = messageIds?.length
       ? messageIds.map((id) => getMessagesKey(id))
       : []
