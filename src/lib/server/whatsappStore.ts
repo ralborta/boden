@@ -183,6 +183,8 @@ function seedStore() {
     })
   })
 
+  isSeeded = true
+
   Object.entries(mockSeedMessages).forEach(([conversationId, messages]) => {
     messages.forEach((message) => {
       storeMessage({
@@ -197,8 +199,6 @@ function seedStore() {
       })
     })
   })
-
-  isSeeded = true
 }
 
 function ensureSeeded() {
