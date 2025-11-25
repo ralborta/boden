@@ -6,7 +6,7 @@ const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_
 export async function GET() {
   try {
     if (!WHATSAPP_API_URL) {
-      return NextResponse.json(getConversations())
+      return NextResponse.json(await getConversations())
     }
 
     const response = await fetch(`${WHATSAPP_API_URL}/conversations`, {
@@ -24,7 +24,7 @@ export async function GET() {
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error in GET /api/whatsapp/conversations:', error)
-    return NextResponse.json(getConversations())
+    return NextResponse.json(await getConversations())
   }
 }
 

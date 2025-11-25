@@ -47,6 +47,10 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 
 - `BUILDERBOT_API_URL`: URL de la API de BuilderBot (default: http://localhost:3001)
 - `WHATSAPP_API_URL`: URL de la API de WhatsApp (opcional)
+- `UPSTASH_REDIS_REST_URL`: URL del endpoint REST de Upstash Redis (opcional)
+- `UPSTASH_REDIS_REST_TOKEN`: Token del endpoint de Upstash Redis (opcional)
+
+Si configurás las variables de Upstash Redis, las conversaciones y mensajes de WhatsApp se persisten allí. Si no, la app usa un almacén en memoria pensado solo para desarrollo local.
 
 ## Deploy
 

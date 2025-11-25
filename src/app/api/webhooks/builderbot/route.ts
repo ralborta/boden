@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   console.log('📩 Webhook Builderbot recibido:', JSON.stringify(body, null, 2))
 
   try {
-    ingestBuilderbotEvent(body)
+    await ingestBuilderbotEvent(body)
   } catch (error) {
     console.error('Error procesando webhook de Builderbot:', error)
   }

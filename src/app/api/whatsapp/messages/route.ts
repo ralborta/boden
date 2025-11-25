@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!WHATSAPP_API_URL) {
-      return NextResponse.json(getMessages(conversationId))
+      return NextResponse.json(await getMessages(conversationId))
     }
 
     const response = await fetch(
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     const conversationId = request.nextUrl.searchParams.get('conversationId')
     if (conversationId) {
-      return NextResponse.json(getMessages(conversationId))
+      return NextResponse.json(await getMessages(conversationId))
     }
 
     return NextResponse.json(
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!WHATSAPP_API_URL) {
-      const newMessage = storeMessage({
+      const newMessage = await storeMessage({
         conversationId,
         from: 'agent',
         text,

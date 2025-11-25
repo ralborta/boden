@@ -1,8 +1,13 @@
-import { WhatsAppConversation, WhatsAppMessage, WhatsAppConversationStatus } from '@/types/whatsapp'
+import { Redis } from '@upstash/redis'
+import {
+  type WhatsAppConversation,
+  type WhatsAppMessage,
+  type WhatsAppConversationStatus,
+} from '@/types/whatsapp'
 
 type ConversationRecord = WhatsAppConversation & { messages: WhatsAppMessage[] }
 
-type RecordMessageInput = {
+export type RecordMessageInput = {
   conversationId: string
   from: 'agent' | 'customer'
   text: string
@@ -15,8 +20,19 @@ type RecordMessageInput = {
   status?: WhatsAppConversationStatus
 }
 
-const conversations = new Map<string, ConversationRecord>()
-let isSeeded = false
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+const redis =
+  redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null
+
+const CONVERSATIONS_KEY = 'boden:whatsapp:conversations'
+const MESSAGES_KEY_PREFIX = 'boden:whatsapp:messages:'
+const MESSAGE_INDEX_KEY = 'boden:whatsapp:message-index'
+
+const memoryConversations = new Map<string, ConversationRecord>()
+let memorySeeded = false
+let redisSeeded = false
+let redisSeedPromise: Promise<void> | null = null
 
 const mockSeedConversations: WhatsAppConversation[] = [
   {
@@ -174,20 +190,69 @@ const mockSeedMessages: Record<string, WhatsAppMessage[]> = {
   ],
 }
 
-function seedStore() {
-  if (isSeeded) return
+function getMessagesKey(conversationId: string) {
+  return `${MESSAGES_KEY_PREFIX}${conversationId}`
+}
+
+async function ensureSeeded() {
+  if (redis) {
+    await ensureRedisSeeded()
+  } else {
+    ensureMemorySeeded()
+  }
+}
+
+async function ensureRedisSeeded() {
+  if (!redis || redisSeeded) return
+  if (redisSeedPromise) return redisSeedPromise
+
+  redisSeedPromise = (async () => {
+    const count = await redis.hlen(CONVERSATIONS_KEY)
+    if (!count || count === 0) {
+      await seedRedis()
+    }
+    redisSeeded = true
+  })()
+
+  return redisSeedPromise
+}
+
+async function seedRedis() {
+  if (!redis) return
+
+  if (mockSeedConversations.length) {
+    const payload = mockSeedConversations.reduce<Record<string, string>>((acc, conv) => {
+      acc[conv.id] = JSON.stringify(conv)
+      return acc
+    }, {})
+    await redis.hset(CONVERSATIONS_KEY, payload)
+  }
+
+  for (const [conversationId, messages] of Object.entries(mockSeedMessages)) {
+    if (messages.length === 0) continue
+    await redis.del(getMessagesKey(conversationId))
+    await redis.rpush(
+      getMessagesKey(conversationId),
+      ...messages.map((message) => JSON.stringify(message))
+    )
+    await redis.sadd(MESSAGE_INDEX_KEY, conversationId)
+  }
+}
+
+function ensureMemorySeeded() {
+  if (memorySeeded) return
   mockSeedConversations.forEach((conversation) => {
-    conversations.set(conversation.id, {
+    memoryConversations.set(conversation.id, {
       ...conversation,
       messages: [],
     })
   })
 
-  isSeeded = true
+  memorySeeded = true
 
   Object.entries(mockSeedMessages).forEach(([conversationId, messages]) => {
     messages.forEach((message) => {
-      storeMessage({
+      storeMessageMemory({
         ...message,
         conversationId,
         from: message.from,
@@ -199,12 +264,6 @@ function seedStore() {
       })
     })
   })
-}
-
-function ensureSeeded() {
-  if (!isSeeded) {
-    seedStore()
-  }
 }
 
 function buildMessageId(explicitId?: string) {
@@ -227,7 +286,81 @@ function toIsoString(date?: string | number) {
   return parsed.toISOString()
 }
 
-export function storeMessage({
+export async function storeMessage(input: RecordMessageInput): Promise<WhatsAppMessage | null> {
+  await ensureSeeded()
+  return redis ? storeMessageRedis(input) : storeMessageMemory(input)
+}
+
+async function storeMessageRedis({
+  conversationId,
+  from,
+  text,
+  sentAt,
+  delivered = true,
+  read,
+  id,
+  contactName,
+  contactPhone,
+  status,
+}: RecordMessageInput): Promise<WhatsAppMessage | null> {
+  if (!redis) return null
+
+  const cleanText = text?.trim()
+  if (!cleanText) return null
+  const timestamp = toIsoString(sentAt)
+  const storedConversation = await redis.hget(CONVERSATIONS_KEY, conversationId)
+  const parsedConversation = storedConversation
+    ? (JSON.parse(storedConversation as string) as WhatsAppConversation)
+    : null
+
+  const fallbackPhone = contactPhone || normalizePhone(conversationId)
+
+  const conversation: WhatsAppConversation = parsedConversation
+    ? {
+        ...parsedConversation,
+        contactName: contactName || parsedConversation.contactName || fallbackPhone,
+        contactPhone: contactPhone || parsedConversation.contactPhone || fallbackPhone,
+        status: status || parsedConversation.status,
+      }
+    : {
+        id: conversationId,
+        contactName: contactName || fallbackPhone,
+        contactPhone: fallbackPhone,
+        lastMessagePreview: cleanText,
+        lastMessageAt: timestamp,
+        unreadCount: from === 'customer' ? 1 : 0,
+        status: status || 'open',
+        channel: 'whatsapp',
+      }
+
+  const message: WhatsAppMessage = {
+    id: buildMessageId(id),
+    conversationId,
+    from,
+    text: cleanText,
+    sentAt: timestamp,
+    delivered,
+    read: typeof read === 'boolean' ? read : from === 'agent',
+  }
+
+  conversation.lastMessagePreview = cleanText
+  conversation.lastMessageAt = timestamp
+  conversation.unreadCount =
+    from === 'customer'
+      ? (parsedConversation?.unreadCount ?? 0) + 1
+      : parsedConversation?.unreadCount ?? 0
+  if (from === 'agent') {
+    conversation.unreadCount = 0
+  }
+
+  await redis.hset(CONVERSATIONS_KEY, { [conversationId]: JSON.stringify(conversation) })
+  await redis.rpush(getMessagesKey(conversationId), JSON.stringify(message))
+  await redis.sadd(MESSAGE_INDEX_KEY, conversationId)
+
+  return message
+}
+
+function storeMessageMemory({
   conversationId,
   from,
   text,
@@ -239,13 +372,11 @@ export function storeMessage({
   contactPhone,
   status,
 }: RecordMessageInput): WhatsAppMessage | null {
-  ensureSeeded()
-
   const cleanText = text?.trim()
   if (!cleanText) return null
   const timestamp = toIsoString(sentAt)
 
-  let conversation = conversations.get(conversationId)
+  let conversation = memoryConversations.get(conversationId)
 
   if (!conversation) {
     const fallbackPhone = contactPhone || normalizePhone(conversationId)
@@ -281,23 +412,49 @@ export function storeMessage({
   conversation.lastMessageAt = timestamp
   conversation.unreadCount = from === 'customer' ? conversation.unreadCount + 1 : 0
 
-  conversations.set(conversationId, conversation)
+  memoryConversations.set(conversationId, conversation)
   return message
 }
 
-export function getConversations(): WhatsAppConversation[] {
-  ensureSeeded()
-  return Array.from(conversations.values())
-    .sort(
-      (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-    )
-    .map(({ messages, ...conversation }) => conversation)
+export async function getConversations(): Promise<WhatsAppConversation[]> {
+  await ensureSeeded()
+  const conversationsList = redis
+    ? await getRedisConversations()
+    : getMemoryConversations()
+
+  return conversationsList.sort(
+    (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+  )
 }
 
-export function getMessages(conversationId: string): WhatsAppMessage[] {
-  ensureSeeded()
-  const conversation = conversations.get(conversationId)
-  return conversation ? conversation.messages : []
+async function getRedisConversations(): Promise<WhatsAppConversation[]> {
+  if (!redis) return []
+  const raw = await redis.hvals(CONVERSATIONS_KEY)
+  return raw
+    .map((value) => (typeof value === 'string' ? value : String(value)))
+    .map((value) => JSON.parse(value) as WhatsAppConversation)
+}
+
+function getMemoryConversations(): WhatsAppConversation[] {
+  return Array.from(memoryConversations.values()).map(({ messages, ...conversation }) => conversation)
+}
+
+export async function getMessages(conversationId: string): Promise<WhatsAppMessage[]> {
+  await ensureSeeded()
+  return redis ? getRedisMessages(conversationId) : getMemoryMessages(conversationId)
+}
+
+async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage[]> {
+  if (!redis) return []
+  const raw = await redis.lrange(getMessagesKey(conversationId), 0, -1)
+  return raw
+    .map((value) => (typeof value === 'string' ? value : value ? String(value) : null))
+    .filter((value): value is string => Boolean(value))
+    .map((value) => JSON.parse(value) as WhatsAppMessage)
+}
+
+function getMemoryMessages(conversationId: string): WhatsAppMessage[] {
+  return memoryConversations.get(conversationId)?.messages ?? []
 }
 
 export function normalizePhone(value?: string) {
@@ -336,7 +493,7 @@ function extractConversationId(data: Record<string, any>): string | null {
   return null
 }
 
-export function ingestBuilderbotEvent(event: BuilderbotEvent) {
+export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
   const { eventName, data } = event
   if (!eventName || !data) return
   if (!['message.incoming', 'message.outgoing'].includes(eventName)) {
@@ -359,7 +516,7 @@ export function ingestBuilderbotEvent(event: BuilderbotEvent) {
     ? toIsoString(Number(data.messageTimestamp))
     : undefined
 
-  storeMessage({
+  await storeMessage({
     conversationId,
     from,
     text,
@@ -372,9 +529,21 @@ export function ingestBuilderbotEvent(event: BuilderbotEvent) {
   })
 }
 
-export function resetWhatsAppStore() {
-  conversations.clear()
-  isSeeded = false
-}
+export async function resetWhatsAppStore() {
+  memoryConversations.clear()
+  memorySeeded = false
 
+  if (redis) {
+    const messageIds = await redis.smembers<string>(MESSAGE_INDEX_KEY)
+    const messageKeys = messageIds?.length
+      ? messageIds.map((id) => getMessagesKey(id))
+      : []
+    if (messageKeys.length) {
+      await redis.del(...messageKeys)
+    }
+    await redis.del(CONVERSATIONS_KEY, MESSAGE_INDEX_KEY)
+    redisSeeded = false
+    redisSeedPromise = null
+  }
+}
 
