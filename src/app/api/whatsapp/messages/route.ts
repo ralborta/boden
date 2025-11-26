@@ -3,6 +3,8 @@ import { getMessages, storeMessage } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -15,8 +17,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    console.log('[GET /api/whatsapp/messages] conversationId:', conversationId)
+
     if (!WHATSAPP_API_URL) {
-      return NextResponse.json(await getMessages(conversationId))
+      const messages = await getMessages(conversationId)
+      console.log(
+        '[GET /api/whatsapp/messages] mensajes:',
+        Array.isArray(messages) ? messages.length : 'no-array'
+      )
+      return NextResponse.json(messages)
     }
 
     const response = await fetch(
@@ -26,6 +35,7 @@ export async function GET(request: NextRequest) {
         headers: {
           'Content-Type': 'application/json',
         },
+        cache: 'no-store',
       }
     )
 
@@ -40,7 +50,12 @@ export async function GET(request: NextRequest) {
 
     const conversationId = request.nextUrl.searchParams.get('conversationId')
     if (conversationId) {
-      return NextResponse.json(await getMessages(conversationId))
+      const fallback = await getMessages(conversationId)
+      console.log(
+        '[GET /api/whatsapp/messages] fallback mensajes:',
+        Array.isArray(fallback) ? fallback.length : 'no-array'
+      )
+      return NextResponse.json(fallback)
     }
 
     return NextResponse.json(
@@ -61,6 +76,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    console.log('[POST /api/whatsapp/messages] enviar mensaje', { conversationId, text })
 
     if (!WHATSAPP_API_URL) {
       const newMessage = await storeMessage({
@@ -88,6 +105,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ conversationId, text }),
+      cache: 'no-store',
     })
 
     if (!response.ok) {

@@ -22,8 +22,26 @@ export type RecordMessageInput = {
 
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+console.log(
+  '[whatsappStore] Redis config -> hasUrl:',
+  !!redisUrl,
+  'hasToken:',
+  !!redisToken,
+  'NODE_ENV:',
+  process.env.NODE_ENV
+)
 const redis =
   redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null
+
+const isHostedProduction =
+  process.env.VERCEL === '1' ||
+  Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT_NAME)
+
+if (!redis && isHostedProduction) {
+  throw new Error(
+    'Redis no está configurado en producción. Configura UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN.'
+  )
+}
 
 const CONVERSATIONS_KEY = 'boden:whatsapp:conversations'
 const MESSAGES_KEY_PREFIX = 'boden:whatsapp:messages:'
@@ -31,8 +49,6 @@ const MESSAGE_INDEX_KEY = 'boden:whatsapp:message-index'
 
 const memoryConversations = new Map<string, ConversationRecord>()
 let memorySeeded = false
-let redisSeeded = false
-let redisSeedPromise: Promise<void> | null = null
 
 const mockSeedConversations: WhatsAppConversation[] = [
   {
@@ -196,47 +212,9 @@ function getMessagesKey(conversationId: string) {
 
 async function ensureSeeded() {
   if (redis) {
-    await ensureRedisSeeded()
-  } else {
-    ensureMemorySeeded()
+    return
   }
-}
-
-async function ensureRedisSeeded() {
-  if (!redis || redisSeeded) return
-  if (redisSeedPromise) return redisSeedPromise
-
-  redisSeedPromise = (async () => {
-    const count = await redis.hlen(CONVERSATIONS_KEY)
-    if (!count || count === 0) {
-      await seedRedis()
-    }
-    redisSeeded = true
-  })()
-
-  return redisSeedPromise
-}
-
-async function seedRedis() {
-  if (!redis) return
-
-  if (mockSeedConversations.length) {
-    const payload = mockSeedConversations.reduce<Record<string, string>>((acc, conv) => {
-      acc[conv.id] = JSON.stringify(conv)
-      return acc
-    }, {})
-    await redis.hset(CONVERSATIONS_KEY, payload)
-  }
-
-  for (const [conversationId, messages] of Object.entries(mockSeedMessages)) {
-    if (messages.length === 0) continue
-    await redis.del(getMessagesKey(conversationId))
-    await redis.rpush(
-      getMessagesKey(conversationId),
-      ...messages.map((message) => JSON.stringify(message))
-    )
-    await redis.sadd(MESSAGE_INDEX_KEY, conversationId)
-  }
+  ensureMemorySeeded()
 }
 
 function ensureMemorySeeded() {
@@ -495,6 +473,13 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
     return
   }
 
+  console.log(
+    '[ingestBuilderbotEvent] procesando evento',
+    eventName,
+    'payload keys:',
+    Object.keys(data ?? {})
+  )
+
   const text = extractText(data)
   const conversationId = extractConversationId(data)
 
@@ -510,6 +495,12 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
   const timestamp = data.messageTimestamp
     ? toIsoString(Number(data.messageTimestamp))
     : undefined
+
+  console.log('[ingestBuilderbotEvent] almacenando mensaje', {
+    conversationId,
+    from,
+    text,
+  })
 
   await storeMessage({
     conversationId,
@@ -537,8 +528,6 @@ export async function resetWhatsAppStore() {
       await redis.del(...messageKeys)
     }
     await redis.del(CONVERSATIONS_KEY, MESSAGE_INDEX_KEY)
-    redisSeeded = false
-    redisSeedPromise = null
   }
 }
 
