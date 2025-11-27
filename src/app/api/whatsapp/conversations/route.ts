@@ -3,6 +3,7 @@ import type { WhatsAppConversation } from '@/types/whatsapp'
 import { getConversations } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
+const ALLOW_MOCKS = process.env.NODE_ENV !== 'production'
 
 // Datos mock para desarrollo como último fallback
 const mockConversations: WhatsAppConversation[] = [
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!WHATSAPP_API_URL) {
-      return NextResponse.json(mockConversations)
+      return NextResponse.json(ALLOW_MOCKS ? mockConversations : [])
     }
 
     const response = await fetch(`${WHATSAPP_API_URL}/conversations`, {
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(mockConversations)
+    return NextResponse.json(ALLOW_MOCKS ? mockConversations : [])
   }
 }
 

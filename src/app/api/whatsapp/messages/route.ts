@@ -3,6 +3,7 @@ import type { WhatsAppMessage } from '@/types/whatsapp'
 import { getMessages } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
+const ALLOW_MOCKS = process.env.NODE_ENV !== 'production'
 
 // Datos mock para desarrollo como último recurso
 const mockMessages: Record<string, WhatsAppMessage[]> = {
@@ -121,8 +122,12 @@ export async function GET(request: NextRequest) {
     }
 
     const storedMessages = await getMessages(conversationId)
-    if (storedMessages.length > 0 || !WHATSAPP_API_URL) {
+    if (storedMessages.length > 0) {
       return NextResponse.json(storedMessages)
+    }
+
+    if (!WHATSAPP_API_URL) {
+      return NextResponse.json(ALLOW_MOCKS ? mockMessages[conversationId] || [] : [])
     }
 
     const response = await fetch(
@@ -146,7 +151,7 @@ export async function GET(request: NextRequest) {
     console.error('Error in GET /api/whatsapp/messages:', error)
 
     const conversationId = request.nextUrl.searchParams.get('conversationId')
-    if (conversationId && mockMessages[conversationId]) {
+    if (conversationId && ALLOW_MOCKS && mockMessages[conversationId]) {
       return NextResponse.json(mockMessages[conversationId])
     }
 
