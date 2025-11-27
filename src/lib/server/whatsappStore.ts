@@ -37,10 +37,14 @@ const isHostedProduction =
   process.env.VERCEL === '1' ||
   Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT_NAME)
 
-if (!redis && isHostedProduction) {
-  throw new Error(
-    'Redis no está configurado en producción. Configura UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN.'
-  )
+if (!redis) {
+  const warning =
+    'Redis no está configurado. Configura UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN.'
+  if (isHostedProduction) {
+    console.warn(`${warning} Se usará almacenamiento en memoria (datos no persistentes).`)
+  } else {
+    console.log(`${warning} Usando almacenamiento en memoria local.`)
+  }
 }
 
 const CONVERSATIONS_KEY = 'boden:whatsapp:conversations'
