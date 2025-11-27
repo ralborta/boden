@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { WhatsAppConversation } from '@/types/whatsapp'
+import { getConversations } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
 
-// Datos mock para desarrollo
+// Datos mock para desarrollo como último fallback
 const mockConversations: WhatsAppConversation[] = [
   {
     id: '1',
     contactName: 'María González',
     contactPhone: '+54 11 1234-5678',
     lastMessagePreview: 'Hola, necesito información sobre sus productos',
-    lastMessageAt: new Date(Date.now() - 5 * 60000).toISOString(), // 5 minutos atrás
+    lastMessageAt: new Date(Date.now() - 5 * 60000).toISOString(),
     unreadCount: 2,
     status: 'open',
     channel: 'whatsapp',
@@ -20,7 +21,7 @@ const mockConversations: WhatsAppConversation[] = [
     contactName: 'Juan Pérez',
     contactPhone: '+54 11 2345-6789',
     lastMessagePreview: 'Perfecto, gracias por la ayuda',
-    lastMessageAt: new Date(Date.now() - 2 * 3600000).toISOString(), // 2 horas atrás
+    lastMessageAt: new Date(Date.now() - 2 * 3600000).toISOString(),
     unreadCount: 0,
     status: 'closed',
     channel: 'whatsapp',
@@ -30,7 +31,7 @@ const mockConversations: WhatsAppConversation[] = [
     contactName: 'Ana Martínez',
     contactPhone: '+54 11 3456-7890',
     lastMessagePreview: '¿Cuál es el precio del plan premium?',
-    lastMessageAt: new Date(Date.now() - 30 * 60000).toISOString(), // 30 minutos atrás
+    lastMessageAt: new Date(Date.now() - 30 * 60000).toISOString(),
     unreadCount: 1,
     status: 'pending',
     channel: 'whatsapp',
@@ -40,7 +41,7 @@ const mockConversations: WhatsAppConversation[] = [
     contactName: 'Carlos Rodríguez',
     contactPhone: '+54 11 4567-8901',
     lastMessagePreview: 'Necesito hablar con un agente',
-    lastMessageAt: new Date(Date.now() - 1 * 3600000).toISOString(), // 1 hora atrás
+    lastMessageAt: new Date(Date.now() - 1 * 3600000).toISOString(),
     unreadCount: 0,
     status: 'open',
     channel: 'whatsapp',
@@ -50,7 +51,7 @@ const mockConversations: WhatsAppConversation[] = [
     contactName: 'Laura Fernández',
     contactPhone: '+54 11 5678-9012',
     lastMessagePreview: 'Excelente servicio, muchas gracias',
-    lastMessageAt: new Date(Date.now() - 24 * 3600000).toISOString(), // 1 día atrás
+    lastMessageAt: new Date(Date.now() - 24 * 3600000).toISOString(),
     unreadCount: 0,
     status: 'closed',
     channel: 'whatsapp',
@@ -59,8 +60,12 @@ const mockConversations: WhatsAppConversation[] = [
 
 export async function GET(request: NextRequest) {
   try {
+    const storedConversations = await getConversations()
+    if (storedConversations.length > 0) {
+      return NextResponse.json(storedConversations)
+    }
+
     if (!WHATSAPP_API_URL) {
-      // Retornar datos mock si no hay API configurada
       return NextResponse.json(mockConversations)
     }
 
@@ -80,15 +85,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error in GET /api/whatsapp/conversations:', error)
-    
-    // Si hay error con la API real, devolver mock como fallback
+
     if (WHATSAPP_API_URL) {
       return NextResponse.json(
         { message: 'Error al conectar con el servicio de WhatsApp' },
         { status: 500 }
       )
     }
-    
+
     return NextResponse.json(mockConversations)
   }
 }

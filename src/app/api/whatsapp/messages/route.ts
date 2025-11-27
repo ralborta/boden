@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { WhatsAppMessage } from '@/types/whatsapp'
+import { getMessages } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
 
-// Datos mock para desarrollo
+// Datos mock para desarrollo como último recurso
 const mockMessages: Record<string, WhatsAppMessage[]> = {
   '1': [
     {
@@ -119,10 +120,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    if (!WHATSAPP_API_URL) {
-      // Retornar datos mock si no hay API configurada
-      const messages = mockMessages[conversationId] || []
-      return NextResponse.json(messages)
+    const storedMessages = await getMessages(conversationId)
+    if (storedMessages.length > 0 || !WHATSAPP_API_URL) {
+      return NextResponse.json(storedMessages)
     }
 
     const response = await fetch(
@@ -144,12 +144,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error in GET /api/whatsapp/messages:', error)
-    
+
     const conversationId = request.nextUrl.searchParams.get('conversationId')
     if (conversationId && mockMessages[conversationId]) {
       return NextResponse.json(mockMessages[conversationId])
     }
-    
+
     return NextResponse.json(
       { message: 'Error al cargar los mensajes' },
       { status: 500 }
