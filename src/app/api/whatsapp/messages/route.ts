@@ -3,6 +3,9 @@ import type { WhatsAppMessage } from '@/types/whatsapp'
 import { getMessages } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
+const REMOTE_WHATSAPP_API_URL =
+  process.env.REMOTE_WHATSAPP_API_URL ||
+  (process.env.VERCEL === '1' ? 'https://boden-production.up.railway.app/api/whatsapp' : '')
 const ALLOW_MOCKS = process.env.NODE_ENV !== 'production'
 
 // Datos mock para desarrollo como último recurso
@@ -109,6 +112,30 @@ const mockMessages: Record<string, WhatsAppMessage[]> = {
   ],
 }
 
+async function fetchRemoteMessages(conversationId: string) {
+  if (!REMOTE_WHATSAPP_API_URL) return null
+  try {
+    const response = await fetch(
+      `${REMOTE_WHATSAPP_API_URL}/messages?conversationId=${encodeURIComponent(conversationId)}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      }
+    )
+
+    if (!response.ok) {
+      console.error('Error fetching remote messages:', response.status)
+      return null
+    }
+
+    return (await response.json()) as WhatsAppMessage[]
+  } catch (error) {
+    console.error('Remote messages fetch failed:', error)
+    return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -124,6 +151,13 @@ export async function GET(request: NextRequest) {
     const storedMessages = await getMessages(conversationId)
     if (storedMessages.length > 0) {
       return NextResponse.json(storedMessages)
+    }
+
+    if (REMOTE_WHATSAPP_API_URL) {
+      const remoteMessages = await fetchRemoteMessages(conversationId)
+      if (remoteMessages) {
+        return NextResponse.json(remoteMessages)
+      }
     }
 
     if (!WHATSAPP_API_URL) {
@@ -174,7 +208,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!WHATSAPP_API_URL) {
+    if (!WHATSAPP_API_URL && !REMOTE_WHATSAPP_API_URL) {
       // Crear mensaje mock
       const newMessage: WhatsAppMessage = {
         id: `m${Date.now()}`,
@@ -185,14 +219,30 @@ export async function POST(request: NextRequest) {
         delivered: true,
         read: false,
       }
-      
-      // Agregar a mockMessages
+
       if (!mockMessages[conversationId]) {
         mockMessages[conversationId] = []
       }
       mockMessages[conversationId].push(newMessage)
-      
+
       return NextResponse.json(newMessage)
+    }
+
+    if (REMOTE_WHATSAPP_API_URL && !WHATSAPP_API_URL) {
+      const response = await fetch(`${REMOTE_WHATSAPP_API_URL}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ conversationId, text }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Error sending message (remote)')
+      }
+
+      const data = await response.json()
+      return NextResponse.json(data)
     }
 
     const response = await fetch(`${WHATSAPP_API_URL}/messages`, {

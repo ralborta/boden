@@ -3,6 +3,9 @@ import type { WhatsAppConversation } from '@/types/whatsapp'
 import { getConversations } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
+const REMOTE_WHATSAPP_API_URL =
+  process.env.REMOTE_WHATSAPP_API_URL ||
+  (process.env.VERCEL === '1' ? 'https://boden-production.up.railway.app/api/whatsapp' : '')
 const ALLOW_MOCKS = process.env.NODE_ENV !== 'production'
 
 // Datos mock para desarrollo como último fallback
@@ -59,11 +62,37 @@ const mockConversations: WhatsAppConversation[] = [
   },
 ]
 
+async function fetchRemoteConversations() {
+  if (!REMOTE_WHATSAPP_API_URL) return null
+  try {
+    const response = await fetch(`${REMOTE_WHATSAPP_API_URL}/conversations`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      console.error('Error fetching remote conversations:', response.status)
+      return null
+    }
+    return (await response.json()) as WhatsAppConversation[]
+  } catch (error) {
+    console.error('Remote conversations fetch failed:', error)
+    return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const storedConversations = await getConversations()
     if (storedConversations.length > 0) {
       return NextResponse.json(storedConversations)
+    }
+
+    if (REMOTE_WHATSAPP_API_URL) {
+      const remoteData = await fetchRemoteConversations()
+      if (remoteData) {
+        return NextResponse.json(remoteData)
+      }
     }
 
     if (!WHATSAPP_API_URL) {
