@@ -83,6 +83,14 @@ async function fetchRemoteConversations() {
 
 export async function GET(request: NextRequest) {
   try {
+    if (process.env.VERCEL === '1' && REMOTE_WHATSAPP_API_URL) {
+      const remoteData = await fetchRemoteConversations()
+      if (remoteData) {
+        return NextResponse.json(remoteData)
+      }
+      console.warn('[whatsapp/conversations] Remote fetch returned empty in Vercel.')
+    }
+
     const storedConversations = await getConversations()
     if (storedConversations.length > 0) {
       return NextResponse.json(storedConversations)

@@ -270,6 +270,12 @@ function toIsoString(date?: string | number) {
 
 export async function storeMessage(input: RecordMessageInput): Promise<WhatsAppMessage | null> {
   await ensureSeeded()
+  const storageLayer = redis ? 'REDIS' : 'MEMORY'
+  console.log('[whatsappStore] storeMessage', {
+    storageLayer,
+    conversationId: input.conversationId,
+    from: input.from,
+  })
   return redis ? storeMessageRedis(input) : storeMessageMemory(input)
 }
 

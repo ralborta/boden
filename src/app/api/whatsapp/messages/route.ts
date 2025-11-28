@@ -148,6 +148,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    if (process.env.VERCEL === '1' && REMOTE_WHATSAPP_API_URL) {
+      const remoteMessages = await fetchRemoteMessages(conversationId)
+      if (remoteMessages) {
+        return NextResponse.json(remoteMessages)
+      }
+      console.warn(
+        '[whatsapp/messages] Remote fetch returned empty in Vercel for',
+        conversationId
+      )
+    }
+
     const storedMessages = await getMessages(conversationId)
     if (storedMessages.length > 0) {
       return NextResponse.json(storedMessages)
@@ -229,20 +240,31 @@ export async function POST(request: NextRequest) {
     }
 
     if (REMOTE_WHATSAPP_API_URL && !WHATSAPP_API_URL) {
-      const response = await fetch(`${REMOTE_WHATSAPP_API_URL}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ conversationId, text }),
-      })
+      try {
+        const response = await fetch(`${REMOTE_WHATSAPP_API_URL}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ conversationId, text }),
+        })
 
-      if (!response.ok) {
-        throw new Error('Error sending message (remote)')
+        if (!response.ok) {
+          const responseText = await response.text()
+          console.error(
+            '[whatsapp/messages][POST] Remote error response:',
+            response.status,
+            responseText
+          )
+          throw new Error('Error sending message (remote)')
+        }
+
+        const data = await response.json()
+        return NextResponse.json(data)
+      } catch (error) {
+        console.error('[whatsapp/messages][POST] Remote fetch failed:', error)
+        throw error
       }
-
-      const data = await response.json()
-      return NextResponse.json(data)
     }
 
     const response = await fetch(`${WHATSAPP_API_URL}/messages`, {
