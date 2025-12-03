@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ingestBuilderbotEvent } from '@/lib/server/whatsappStore'
+import {
+  ingestBuilderbotEvent,
+  BuilderbotPayloadError,
+} from '@/lib/server/whatsappStore'
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,6 +21,17 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (error) {
+    if (error instanceof BuilderbotPayloadError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: error.message,
+          error: error.details ?? null,
+        },
+        { status: 422 }
+      )
+    }
+
     console.error('Error procesando webhook de Builderbot:', error)
     const message =
       error instanceof Error ? error.message : 'Error desconocido procesando webhook'
