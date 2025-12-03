@@ -19,8 +19,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('Error procesando webhook de Builderbot:', error)
+    const message =
+      error instanceof Error ? error.message : 'Error desconocido procesando webhook'
     return NextResponse.json(
-      { ok: false, message: 'Error procesando webhook' },
+      { ok: false, message: 'Error procesando webhook', error: message },
       { status: 500 }
     )
   }
