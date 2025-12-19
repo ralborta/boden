@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ingestBuilderbotEvent } from '@/lib/server/whatsappStore'
 
-// Este endpoint es un alias para /api/webhooks/builderbot
-// BuilderBot está configurado para enviar a /webhooks/events
-// pero el endpoint correcto es /api/webhooks/builderbot
-// Este archivo permite compatibilidad con ambas rutas
+// Este endpoint maneja webhooks de BuilderBot en la ruta /webhooks/events
+// BuilderBot está configurado para enviar a esta ruta específica
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
-    console.log('📩 Webhook recibido en /webhooks/events (redirigiendo a lógica de builderbot):', JSON.stringify(body, null, 2))
+    console.log('📩 Webhook recibido en /webhooks/events:', JSON.stringify(body, null, 2))
 
     const eventName = body?.eventName || body?.event
     const data = body?.data || body?.payload || body
