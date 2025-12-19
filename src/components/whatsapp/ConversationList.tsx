@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Search, Loader2, AlertCircle } from 'lucide-react'
 import { fetchWhatsAppConversations } from '@/lib/api/whatsapp'
 import type { WhatsAppConversation } from '@/types/whatsapp'
@@ -24,28 +24,50 @@ export default function ConversationList({
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
-    loadConversations()
+    // Primera carga con loading
+    loadConversations(true)
     
-    // Polling para actualizar conversaciones cada 5 segundos
+    // Polling para actualizar conversaciones cada 5 segundos (sin mostrar loading)
     const interval = setInterval(() => {
-      loadConversations()
+      loadConversations(false)
     }, 5000)
     
     return () => clearInterval(interval)
-  }, [])
+  }, [loadConversations])
 
-  const loadConversations = async () => {
-    setIsLoading(true)
+  const loadConversations = useCallback(async (showLoading = false) => {
+    // Solo mostrar loading en la primera carga o si se solicita explícitamente
+    if (showLoading || conversations.length === 0) {
+      setIsLoading(true)
+    }
     setError(null)
     try {
       const data = await fetchWhatsAppConversations()
-      setConversations(data)
+      
+      setConversations(prevConversations => {
+        // Solo actualizar si hay cambios reales (comparar por IDs y lastMessageAt)
+        const currentIds = new Set(prevConversations.map(c => c.id))
+        const newIds = new Set(data.map(c => c.id))
+        const hasNewConversations = ![...newIds].every(id => currentIds.has(id))
+        const hasRemovedConversations = ![...currentIds].every(id => newIds.has(id))
+        
+        // Comparar si algún mensaje cambió (por lastMessageAt)
+        const hasMessageChanges = prevConversations.some(conv => {
+          const newConv = data.find(c => c.id === conv.id)
+          return newConv && newConv.lastMessageAt !== conv.lastMessageAt
+        })
+        
+        if (hasNewConversations || hasRemovedConversations || hasMessageChanges || prevConversations.length === 0) {
+          return data
+        }
+        return prevConversations
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar las conversaciones')
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [conversations.length])
 
   const filteredConversations = conversations.filter((conv) => {
     // Filtro por estado

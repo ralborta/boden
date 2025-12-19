@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Loader2, AlertCircle } from 'lucide-react'
 import { fetchWhatsAppMessages, sendWhatsAppMessage } from '@/lib/api/whatsapp'
 import { fetchWhatsAppConversations } from '@/lib/api/whatsapp'
@@ -21,27 +21,6 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => {
-    if (conversationId) {
-      loadConversation()
-      loadMessages()
-      
-      // Polling para actualizar mensajes cada 5 segundos (reducido para evitar loops)
-      const interval = setInterval(() => {
-        loadMessages()
-      }, 5000)
-      
-      return () => clearInterval(interval)
-    } else {
-      setMessages([])
-      setConversation(null)
-    }
-  }, [conversationId])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
   const loadConversation = async () => {
     if (!conversationId) return
     try {
@@ -55,35 +34,36 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
     }
   }
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async (showLoading = false) => {
     if (!conversationId) return
 
-    // No mostrar loading si ya hay mensajes (para evitar parpadeos)
-    const wasEmpty = messages.length === 0
-    if (wasEmpty) {
-      setIsLoadingMessages(true)
-    }
+    // Solo mostrar loading en la primera carga o si se solicita explícitamente
+    setMessages(prevMessages => {
+      const wasEmpty = prevMessages.length === 0
+      if (showLoading || wasEmpty) {
+        setIsLoadingMessages(true)
+      }
+      return prevMessages
+    })
+    
     setErrorMessages(null)
     try {
       const data = await fetchWhatsAppMessages(conversationId)
       
-      // Comparar de manera más robusta: por IDs de todos los mensajes
-      const currentIds = new Set(messages.map(m => m.id))
-      const newIds = new Set(data.map(m => m.id))
-      const hasChanges = 
-        currentIds.size !== newIds.size ||
-        ![...newIds].every(id => currentIds.has(id)) ||
-        ![...currentIds].every(id => newIds.has(id))
-      
-      if (hasChanges || wasEmpty) {
-        console.log('[ChatWindow] Actualizando mensajes:', {
-          anteriores: messages.length,
-          nuevos: data.length,
-          idsAnteriores: [...currentIds],
-          idsNuevos: [...newIds]
-        })
-        setMessages(data)
-      }
+      setMessages(prevMessages => {
+        // Comparar de manera más robusta: por IDs de todos los mensajes
+        const currentIds = new Set(prevMessages.map(m => m.id))
+        const newIds = new Set(data.map(m => m.id))
+        const hasChanges = 
+          currentIds.size !== newIds.size ||
+          ![...newIds].every(id => currentIds.has(id)) ||
+          ![...currentIds].every(id => newIds.has(id))
+        
+        if (hasChanges || prevMessages.length === 0) {
+          return data
+        }
+        return prevMessages
+      })
     } catch (error) {
       setErrorMessages(
         error instanceof Error ? error.message : 'No se pudieron cargar los mensajes'
@@ -91,7 +71,29 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
     } finally {
       setIsLoadingMessages(false)
     }
-  }
+  }, [conversationId])
+
+  useEffect(() => {
+    if (conversationId) {
+      loadConversation()
+      // Primera carga con loading
+      loadMessages(true)
+      
+      // Polling para actualizar mensajes cada 5 segundos (sin mostrar loading)
+      const interval = setInterval(() => {
+        loadMessages(false)
+      }, 5000)
+      
+      return () => clearInterval(interval)
+    } else {
+      setMessages([])
+      setConversation(null)
+    }
+  }, [conversationId, loadMessages])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -106,9 +108,8 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
 
     try {
       const newMessage = await sendWhatsAppMessage(conversationId, textToSend)
-      // Recargar mensajes inmediatamente después de enviar (no solo agregar optimistamente)
-      // Esto asegura que tenemos la versión correcta desde Redis
-      await loadMessages()
+      // Recargar mensajes inmediatamente después de enviar (sin mostrar loading)
+      await loadMessages(false)
     } catch (error) {
       // Restaurar texto si hay error
       setMessageText(textToSend)
