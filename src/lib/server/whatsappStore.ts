@@ -288,7 +288,9 @@ async function storeMessageRedis({
   const timestamp = toIsoString(sentAt)
   const storedConversation = await redis.hget(CONVERSATIONS_KEY, conversationId)
   const parsedConversation = storedConversation
-    ? (JSON.parse(storedConversation as string) as WhatsAppConversation)
+    ? (typeof storedConversation === 'string' 
+        ? (JSON.parse(storedConversation) as WhatsAppConversation)
+        : (storedConversation as WhatsAppConversation))
     : null
 
   const fallbackPhone = contactPhone || normalizePhone(conversationId)
@@ -407,8 +409,12 @@ export async function getConversations(): Promise<WhatsAppConversation[]> {
 
 async function getRedisConversations(): Promise<WhatsAppConversation[]> {
   if (!redis) return []
-  const raw = (await redis.hvals(CONVERSATIONS_KEY)) as string[]
-  return raw.map((value) => JSON.parse(value) as WhatsAppConversation)
+  const raw = await redis.hvals(CONVERSATIONS_KEY)
+  return raw.map((value) => 
+    typeof value === 'string' 
+      ? (JSON.parse(value) as WhatsAppConversation)
+      : (value as WhatsAppConversation)
+  )
 }
 
 function getMemoryConversations(): WhatsAppConversation[] {
@@ -422,8 +428,12 @@ export async function getMessages(conversationId: string): Promise<WhatsAppMessa
 
 async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage[]> {
   if (!redis) return []
-  const raw = (await redis.lrange(getMessagesKey(conversationId), 0, -1)) as string[]
-  return raw.map((value) => JSON.parse(value) as WhatsAppMessage)
+  const raw = await redis.lrange(getMessagesKey(conversationId), 0, -1)
+  return raw.map((value) => 
+    typeof value === 'string' 
+      ? (JSON.parse(value) as WhatsAppMessage)
+      : (value as WhatsAppMessage)
+  )
 }
 
 function getMemoryMessages(conversationId: string): WhatsAppMessage[] {

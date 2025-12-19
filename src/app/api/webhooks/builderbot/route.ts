@@ -44,9 +44,15 @@ export async function POST(req: NextRequest) {
     // (Esto cubre el caso de Railway, pero también cualquier otro servidor)
     if (VERCEL_WEBHOOK_URL && !isVercel) {
       try {
-        const vercelUrl = VERCEL_WEBHOOK_URL.endsWith('/api/webhooks/builderbot')
-          ? VERCEL_WEBHOOK_URL
-          : `${VERCEL_WEBHOOK_URL.replace(/\/$/, '')}/api/webhooks/builderbot`
+        // Asegurar que la URL tenga protocolo https://
+        let baseUrl = VERCEL_WEBHOOK_URL.trim()
+        if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+          baseUrl = `https://${baseUrl}`
+        }
+        
+        const vercelUrl = baseUrl.endsWith('/api/webhooks/builderbot')
+          ? baseUrl
+          : `${baseUrl.replace(/\/$/, '')}/api/webhooks/builderbot`
         
         console.log('🔄 Reenviando webhook a Vercel:', vercelUrl)
         console.log('🔄 Payload:', JSON.stringify(body, null, 2))
