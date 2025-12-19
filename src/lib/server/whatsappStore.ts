@@ -305,8 +305,13 @@ async function storeMessageRedis({
 
   const cleanText = text?.trim()
   if (!cleanText) return null
+  
+  // Normalizar conversationId para que sea consistente (siempre con +)
+  const normalizedConversationId = normalizePhone(conversationId)
+  console.log('[storeMessageRedis] conversationId original:', conversationId, 'normalizado:', normalizedConversationId)
+  
   const timestamp = toIsoString(sentAt)
-  const storedConversation = await redis.hget(CONVERSATIONS_KEY, conversationId)
+  const storedConversation = await redis.hget(CONVERSATIONS_KEY, normalizedConversationId)
   const parsedConversation = storedConversation
     ? (typeof storedConversation === 'string' 
         ? (JSON.parse(storedConversation) as WhatsAppConversation)
@@ -323,7 +328,7 @@ async function storeMessageRedis({
         status: status || parsedConversation.status,
       }
     : {
-        id: conversationId,
+        id: normalizedConversationId,
         contactName: contactName || fallbackPhone,
         contactPhone: fallbackPhone,
         lastMessagePreview: cleanText,
@@ -335,7 +340,7 @@ async function storeMessageRedis({
 
   const message: WhatsAppMessage = {
     id: buildMessageId(id),
-    conversationId,
+    conversationId: normalizedConversationId,
     from,
     text: cleanText,
     sentAt: timestamp,
@@ -353,10 +358,10 @@ async function storeMessageRedis({
     conversation.unreadCount = 0
   }
 
-  await redis.hset(CONVERSATIONS_KEY, { [conversationId]: JSON.stringify(conversation) })
+  await redis.hset(CONVERSATIONS_KEY, { [normalizedConversationId]: JSON.stringify(conversation) })
   
   // Verificar si el mensaje ya existe antes de agregarlo (evitar duplicados)
-  const messagesKey = getMessagesKey(conversationId)
+  const messagesKey = getMessagesKey(normalizedConversationId)
   const existingMessages = await redis.lrange(messagesKey, 0, -1)
   const messageExists = existingMessages.some((msg: string | unknown) => {
     try {
@@ -393,14 +398,17 @@ function storeMessageMemory({
 }: RecordMessageInput): WhatsAppMessage | null {
   const cleanText = text?.trim()
   if (!cleanText) return null
+  
+  // Normalizar conversationId para que sea consistente
+  const normalizedConversationId = normalizePhone(conversationId)
   const timestamp = toIsoString(sentAt)
 
-  let conversation = memoryConversations.get(conversationId)
+  let conversation = memoryConversations.get(normalizedConversationId)
 
   if (!conversation) {
-    const fallbackPhone = contactPhone || normalizePhone(conversationId)
+    const fallbackPhone = contactPhone || normalizedConversationId
     conversation = {
-      id: conversationId,
+      id: normalizedConversationId,
       contactName: contactName || fallbackPhone,
       contactPhone: fallbackPhone,
       lastMessagePreview: cleanText,
@@ -418,7 +426,7 @@ function storeMessageMemory({
 
   const message: WhatsAppMessage = {
     id: buildMessageId(id),
-    conversationId,
+    conversationId: normalizedConversationId,
     from,
     text: cleanText,
     sentAt: timestamp,
@@ -431,7 +439,7 @@ function storeMessageMemory({
   conversation.lastMessageAt = timestamp
   conversation.unreadCount = from === 'customer' ? conversation.unreadCount + 1 : 0
 
-  memoryConversations.set(conversationId, conversation)
+  memoryConversations.set(normalizedConversationId, conversation)
   return message
 }
 
@@ -445,6 +453,9 @@ export async function getConversations(): Promise<WhatsAppConversation[]> {
     : getMemoryConversations()
 
   console.log('[getConversations] Total conversaciones encontradas:', conversationsList.length)
+  if (conversationsList.length > 0) {
+    console.log('[getConversations] IDs de conversaciones:', conversationsList.map(c => c.id))
+  }
   
   return conversationsList.sort(
     (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
@@ -491,9 +502,11 @@ function getMemoryConversations(): WhatsAppConversation[] {
 export async function getMessages(conversationId: string): Promise<WhatsAppMessage[]> {
   await ensureSeeded()
   
-  console.log('[getMessages] conversationId:', conversationId, 'Redis configurado:', !!redis)
+  // Normalizar conversationId para que sea consistente
+  const normalizedConversationId = normalizePhone(conversationId)
+  console.log('[getMessages] conversationId original:', conversationId, 'normalizado:', normalizedConversationId, 'Redis configurado:', !!redis)
   
-  const messages = redis ? await getRedisMessages(conversationId) : getMemoryMessages(conversationId)
+  const messages = redis ? await getRedisMessages(normalizedConversationId) : getMemoryMessages(normalizedConversationId)
   
   console.log('[getMessages] Total mensajes encontrados:', messages.length)
   
@@ -566,17 +579,27 @@ function extractText(data: Record<string, any>): string | undefined {
 
 function extractConversationId(data: Record<string, any>): string | null {
   // Primero verificar si viene directamente en el payload
-  if (data.conversationId) return data.conversationId
+  if (data.conversationId) {
+    // Normalizar el conversationId para que sea consistente
+    return normalizePhone(data.conversationId)
+  }
   
   // Luego buscar en las estructuras anidadas
   const remote = data.key?.remoteJid || data.remoteJid || data.from || data.to
-  if (remote) return remote
-  if (data.contact?.id) return data.contact.id
+  if (remote) {
+    // Normalizar para que siempre tenga el mismo formato
+    return normalizePhone(remote)
+  }
+  if (data.contact?.id) {
+    return normalizePhone(data.contact.id)
+  }
   if (data.projectId && data.ref?.id) {
-    return `${data.projectId}:${data.ref.id}`
+    return `${data.projectId}:${normalizePhone(data.ref.id)}`
   }
   // Si no hay nada, usar el 'from' como fallback
-  if (data.from) return data.from
+  if (data.from) {
+    return normalizePhone(data.from)
+  }
   return null
 }
 
@@ -631,6 +654,8 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
     text,
     name,
     phone,
+    normalizedPhone: normalizePhone(conversationId),
+    conversationIdMatchesPhone: conversationId === phone,
   })
 
   const storedMessage = await storeMessage({
