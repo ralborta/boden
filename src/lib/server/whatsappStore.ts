@@ -410,7 +410,7 @@ export async function getConversations(): Promise<WhatsAppConversation[]> {
 async function getRedisConversations(): Promise<WhatsAppConversation[]> {
   if (!redis) return []
   const raw = await redis.hvals(CONVERSATIONS_KEY)
-  return raw.map((value) => 
+  return raw.map((value: string | unknown) => 
     typeof value === 'string' 
       ? (JSON.parse(value) as WhatsAppConversation)
       : (value as WhatsAppConversation)
@@ -429,7 +429,7 @@ export async function getMessages(conversationId: string): Promise<WhatsAppMessa
 async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage[]> {
   if (!redis) return []
   const raw = await redis.lrange(getMessagesKey(conversationId), 0, -1)
-  return raw.map((value) => 
+  return raw.map((value: string | unknown) => 
     typeof value === 'string' 
       ? (JSON.parse(value) as WhatsAppMessage)
       : (value as WhatsAppMessage)
