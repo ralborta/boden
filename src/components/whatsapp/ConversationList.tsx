@@ -23,18 +23,6 @@ export default function ConversationList({
   const [filter, setFilter] = useState<FilterType>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
-  useEffect(() => {
-    // Primera carga con loading
-    loadConversations(true)
-    
-    // Polling para actualizar conversaciones cada 5 segundos (sin mostrar loading)
-    const interval = setInterval(() => {
-      loadConversations(false)
-    }, 5000)
-    
-    return () => clearInterval(interval)
-  }, [loadConversations])
-
   const loadConversations = useCallback(async (showLoading = false) => {
     // Solo mostrar loading en la primera carga o si se solicita explícitamente
     if (showLoading || conversations.length === 0) {
@@ -68,6 +56,18 @@ export default function ConversationList({
       setIsLoading(false)
     }
   }, [conversations.length])
+
+  useEffect(() => {
+    // Primera carga con loading
+    loadConversations(true)
+    
+    // Polling para actualizar conversaciones cada 5 segundos (sin mostrar loading)
+    const interval = setInterval(() => {
+      loadConversations(false)
+    }, 5000)
+    
+    return () => clearInterval(interval)
+  }, [loadConversations])
 
   const filteredConversations = conversations.filter((conv) => {
     // Filtro por estado
