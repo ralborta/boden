@@ -379,7 +379,7 @@ async function storeMessageRedis({
     console.log('[storeMessageRedis] Mensaje ya existe, omitiendo duplicado:', message.id)
   }
   
-  await redis.sadd(MESSAGE_INDEX_KEY, conversationId)
+  await redis.sadd(MESSAGE_INDEX_KEY, normalizedConversationId)
 
   return message
 }
@@ -473,14 +473,29 @@ async function getRedisConversations(): Promise<WhatsAppConversation[]> {
     const raw = await redis.hvals(CONVERSATIONS_KEY)
     console.log('[getRedisConversations] Valores encontrados en Redis:', raw?.length || 0)
     
-    const conversations = raw.map((value: string | unknown) => 
-      typeof value === 'string' 
+    const conversations = raw.map((value: string | unknown) => {
+      const parsed = typeof value === 'string' 
         ? (JSON.parse(value) as WhatsAppConversation)
         : (value as WhatsAppConversation)
-    )
+      // Normalizar el ID de la conversación para evitar duplicados
+      parsed.id = normalizePhone(parsed.id)
+      return parsed
+    })
     
-    console.log('[getRedisConversations] Conversaciones parseadas:', conversations.length)
-    return conversations
+    // Eliminar duplicados por ID (por si hay conversaciones con y sin +)
+    const uniqueConversations = new Map<string, WhatsAppConversation>()
+    conversations.forEach((conv: WhatsAppConversation) => {
+      const normalizedId = normalizePhone(conv.id)
+      // Si ya existe, mantener la más reciente
+      const existing = uniqueConversations.get(normalizedId)
+      if (!existing || new Date(conv.lastMessageAt) > new Date(existing.lastMessageAt)) {
+        uniqueConversations.set(normalizedId, { ...conv, id: normalizedId })
+      }
+    })
+    
+    const deduplicated = Array.from(uniqueConversations.values())
+    console.log('[getRedisConversations] Conversaciones parseadas:', conversations.length, 'después de deduplicar:', deduplicated.length)
+    return deduplicated
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error('❌ [getRedisConversations] Error leyendo desde Redis:', {
@@ -531,8 +546,20 @@ async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage
         : (value as WhatsAppMessage)
     )
     
-    console.log('[getRedisMessages] Mensajes parseados:', messages.length)
-    return messages
+    // Eliminar duplicados por ID
+    const uniqueMessages = new Map<string, WhatsAppMessage>()
+    messages.forEach(msg => {
+      if (!uniqueMessages.has(msg.id)) {
+        uniqueMessages.set(msg.id, msg)
+      }
+    })
+    
+    const deduplicated = Array.from(uniqueMessages.values())
+    // Ordenar por fecha
+    deduplicated.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime())
+    
+    console.log('[getRedisMessages] Mensajes parseados:', messages.length, 'después de deduplicar:', deduplicated.length)
+    return deduplicated
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error('❌ [getRedisMessages] Error leyendo desde Redis:', {

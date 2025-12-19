@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { WhatsAppMessage } from '@/types/whatsapp'
-import { getMessages, storeMessage } from '@/lib/server/whatsappStore'
+import { getMessages, storeMessage, normalizePhone } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
 
@@ -120,9 +120,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Normalizar conversationId para que sea consistente
+    const normalizedConversationId = normalizePhone(conversationId)
+    console.log('[GET /api/whatsapp/messages] conversationId original:', conversationId, 'normalizado:', normalizedConversationId)
+
     // Los datos vienen vía webhook y se almacenan en Redis/memoria
     // No necesitamos hacer fetch a Railway
-    const storedMessages = await getMessages(conversationId)
+    const storedMessages = await getMessages(normalizedConversationId)
     if (storedMessages.length > 0) {
       return NextResponse.json(storedMessages)
     }
@@ -176,8 +180,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Normalizar conversationId para que sea consistente
+    const normalizedConversationId = normalizePhone(conversationId)
+    console.log('[POST /api/whatsapp/messages] conversationId original:', conversationId, 'normalizado:', normalizedConversationId)
+
     const stored = await storeMessage({
-      conversationId,
+      conversationId: normalizedConversationId,
       from: 'agent',
       text,
       sentAt: Date.now(),
