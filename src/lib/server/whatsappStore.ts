@@ -231,10 +231,18 @@ function getMessagesKey(conversationId: string) {
 }
 
 async function ensureSeeded() {
+  // Solo usar datos mock en desarrollo local, NO en producción
+  const isProduction = process.env.VERCEL === '1' || Boolean(process.env.RAILWAY_ENVIRONMENT)
+  
   if (redis) {
+    // En producción con Redis, no usar mocks
     return
   }
-  ensureMemorySeeded()
+  
+  // Solo en desarrollo local sin Redis
+  if (!isProduction) {
+    ensureMemorySeeded()
+  }
 }
 
 function ensureMemorySeeded() {
@@ -444,6 +452,14 @@ function storeMessageMemory({
 }
 
 export async function getConversations(): Promise<WhatsAppConversation[]> {
+  const isProduction = process.env.VERCEL === '1' || Boolean(process.env.RAILWAY_ENVIRONMENT)
+  
+  // En producción, solo usar Redis, no mocks
+  if (isProduction && !redis) {
+    console.warn('[getConversations] Producción sin Redis - retornando array vacío')
+    return []
+  }
+  
   await ensureSeeded()
   
   console.log('[getConversations] Redis configurado:', !!redis, 'isVercel:', process.env.VERCEL === '1', 'isRailway:', Boolean(process.env.RAILWAY_ENVIRONMENT))
@@ -515,6 +531,14 @@ function getMemoryConversations(): WhatsAppConversation[] {
 }
 
 export async function getMessages(conversationId: string): Promise<WhatsAppMessage[]> {
+  const isProduction = process.env.VERCEL === '1' || Boolean(process.env.RAILWAY_ENVIRONMENT)
+  
+  // En producción, solo usar Redis, no mocks
+  if (isProduction && !redis) {
+    console.warn('[getMessages] Producción sin Redis - retornando array vacío')
+    return []
+  }
+  
   await ensureSeeded()
   
   // Normalizar conversationId para que sea consistente
