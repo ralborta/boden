@@ -167,78 +167,124 @@ export async function POST(request: NextRequest) {
       text: text.substring(0, 50),
     })
 
+    // Verificar configuración de BuilderBot antes de intentar enviar
+    const hasBuilderBotConfig = !!(process.env.BUILDERBOT_BOT_ID && process.env.BUILDERBOT_API_KEY)
+    console.log('[POST /api/whatsapp/messages] Configuración BuilderBot:', {
+      hasBOT_ID: !!process.env.BUILDERBOT_BOT_ID,
+      hasAPI_KEY: !!process.env.BUILDERBOT_API_KEY,
+      BOT_ID_length: process.env.BUILDERBOT_BOT_ID?.length || 0,
+      API_KEY_length: process.env.BUILDERBOT_API_KEY?.length || 0,
+      BUILDERBOT_BASE_URL: process.env.BUILDERBOT_BASE_URL || 'https://app.builderbot.cloud (default)',
+    })
+
     // Intentar enviar a BuilderBot Cloud API v2 usando el código que funciona
-    try {
-      // Normalizar número (quitar espacios y guiones) como en el código original
-      const number = normalizedConversationId.replace(/\s|-/g, '')
-      
-      console.log('[POST /api/whatsapp/messages] Enviando a BuilderBot Cloud API v2:', {
-        number,
-        messageLength: text.length,
-      })
+    if (hasBuilderBotConfig) {
+      try {
+        // Normalizar número: asegurar que tenga + y quitar espacios/guiones
+        let number = normalizedConversationId.replace(/\s|-/g, '')
+        // Asegurar que empiece con +
+        if (!number.startsWith('+')) {
+          number = `+${number}`
+        }
+        
+        console.log('[POST /api/whatsapp/messages] Enviando a BuilderBot Cloud API v2:', {
+          number,
+          originalConversationId: conversationId,
+          normalizedConversationId,
+          messageLength: text.length,
+          messagePreview: text.substring(0, 50),
+        })
 
-      const result = await sendWhatsAppMessage({
-        number,
-        message: text,
-        checkIfExists: false,
-      })
+        const result = await sendWhatsAppMessage({
+          number,
+          message: text,
+          checkIfExists: false,
+        })
 
-      console.log('[POST /api/whatsapp/messages] ✅ Mensaje enviado a BuilderBot exitosamente:', {
-        messageId: result?.id || result?.messageId || 'N/A',
-      })
+        console.log('[POST /api/whatsapp/messages] ✅ Mensaje enviado a BuilderBot exitosamente:', {
+          messageId: result?.id || result?.messageId || 'N/A',
+          result: JSON.stringify(result).substring(0, 200),
+        })
 
-      // Almacenar el mensaje localmente después de enviarlo
-      const stored = await storeMessage({
-        conversationId: normalizedConversationId,
-        from: 'agent',
-        text,
-        sentAt: Date.now(),
-        delivered: true,
-        read: true,
-      })
+        // Almacenar el mensaje localmente después de enviarlo
+        const stored = await storeMessage({
+          conversationId: normalizedConversationId,
+          from: 'agent',
+          text,
+          sentAt: Date.now(),
+          delivered: true,
+          read: true,
+        })
 
-      return NextResponse.json(stored || {
-        id: result?.id || result?.messageId || `msg_${Date.now()}`,
-        conversationId: normalizedConversationId,
-        from: 'agent',
-        text,
-        sentAt: new Date().toISOString(),
-        delivered: true,
-        read: true,
+        return NextResponse.json(stored || {
+          id: result?.id || result?.messageId || `msg_${Date.now()}`,
+          conversationId: normalizedConversationId,
+          from: 'agent',
+          text,
+          sentAt: new Date().toISOString(),
+          delivered: true,
+          read: true,
+        })
+      } catch (builderbotError) {
+        const errorMessage = builderbotError instanceof Error ? builderbotError.message : String(builderbotError)
+        const errorStack = builderbotError instanceof Error ? builderbotError.stack : undefined
+        const axiosError = (builderbotError as any)?.response
+        
+        console.error('[POST /api/whatsapp/messages] ❌ Error al enviar a BuilderBot:', {
+          error: errorMessage,
+          stack: errorStack,
+          axiosStatus: axiosError?.status,
+          axiosStatusText: axiosError?.statusText,
+          axiosData: axiosError?.data ? JSON.stringify(axiosError.data).substring(0, 300) : undefined,
+          axiosUrl: axiosError?.config?.url,
+          suggestion: 'Verifica que BUILDERBOT_BOT_ID y BUILDERBOT_API_KEY estén configurados correctamente en Vercel',
+        })
+        
+        // Retornar error explícito para que el usuario sepa que falló
+        return NextResponse.json(
+          { 
+            message: 'Error al enviar mensaje a BuilderBot',
+            error: errorMessage,
+            details: axiosError?.data || undefined,
+            suggestion: 'Verifica las variables de entorno BUILDERBOT_BOT_ID y BUILDERBOT_API_KEY en Vercel',
+          },
+          { status: 500 }
+        )
+      }
+    } else {
+      console.warn('[POST /api/whatsapp/messages] ⚠️ BuilderBot no configurado. Variables faltantes:', {
+        missing_BOT_ID: !process.env.BUILDERBOT_BOT_ID,
+        missing_API_KEY: !process.env.BUILDERBOT_API_KEY,
       })
-    } catch (builderbotError) {
-      console.error('[POST /api/whatsapp/messages] ❌ Error al enviar a BuilderBot:', {
-        error: builderbotError instanceof Error ? builderbotError.message : String(builderbotError),
-        suggestion: 'Verifica que BUILDERBOT_BOT_ID y BUILDERBOT_API_KEY estén configurados',
-      })
-      // Continuar para almacenar localmente aunque falle el envío
     }
 
-    // Almacenar el mensaje localmente (siempre, incluso si no hay API configurada)
+    // Si llegamos aquí, BuilderBot no está configurado o falló
+    // Almacenar el mensaje localmente de todas formas
     const stored = await storeMessage({
       conversationId: normalizedConversationId,
       from: 'agent',
       text,
       sentAt: Date.now(),
-      delivered: true,
+      delivered: false, // No entregado si no se pudo enviar a BuilderBot
       read: true,
     })
 
     if (stored) {
-      console.log('[POST /api/whatsapp/messages] ✅ Mensaje almacenado localmente')
-      return NextResponse.json(stored)
+      console.log('[POST /api/whatsapp/messages] ✅ Mensaje almacenado localmente (pero NO enviado a BuilderBot)')
+      return NextResponse.json({
+        ...stored,
+        warning: !hasBuilderBotConfig ? 'BuilderBot no configurado. Mensaje solo almacenado localmente.' : undefined,
+      })
     }
 
     // Fallback: crear mensaje mock si no se pudo almacenar
-    // Si llegamos aquí, BuilderBot falló pero almacenamos localmente
-    const hasBuilderBotConfig = !!(process.env.BUILDERBOT_BOT_ID && process.env.BUILDERBOT_API_KEY)
     const newMessage: WhatsAppMessage = {
       id: `m${Date.now()}`,
       conversationId: normalizedConversationId,
       from: 'agent',
       text,
       sentAt: new Date().toISOString(),
-      delivered: !hasBuilderBotConfig, // Si no hay BuilderBot configurado, marcamos como entregado
+      delivered: false,
       read: false,
     }
 

@@ -62,7 +62,43 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions) {
     'x-api-builderbot': API_KEY as string,
   }
 
-  const response = await axios.post(url, body, { headers, timeout: 30000 })
-  return response.data
+  console.log('[sendWhatsAppMessage] Enviando a BuilderBot:', {
+    url,
+    number,
+    messageLength: message.length,
+    hasMediaUrl: !!mediaUrl,
+    checkIfExists,
+    botIdLength: BOT_ID.length,
+    apiKeyLength: API_KEY.length,
+  })
+
+  try {
+    const response = await axios.post(url, body, { headers, timeout: 30000 })
+    console.log('[sendWhatsAppMessage] ✅ Respuesta exitosa de BuilderBot:', {
+      status: response.status,
+      data: JSON.stringify(response.data).substring(0, 200),
+    })
+    return response.data
+  } catch (error: any) {
+    // Verificar si es un error de axios
+    if (error?.response || error?.request) {
+      const errorDetails = {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url || url,
+        method: error.config?.method || 'POST',
+      }
+      console.error('[sendWhatsAppMessage] ❌ Error de axios:', errorDetails)
+      throw new Error(
+        `Error al enviar mensaje a BuilderBot: ${error.message} (${error.response?.status || 'NO STATUS'}) - ${JSON.stringify(error.response?.data || {}).substring(0, 200)}`
+      )
+    }
+    console.error('[sendWhatsAppMessage] ❌ Error desconocido:', error)
+    throw error
+  }
 }
+
+
 
