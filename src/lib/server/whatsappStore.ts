@@ -467,12 +467,18 @@ function extractText(data: Record<string, any>): string | undefined {
 }
 
 function extractConversationId(data: Record<string, any>): string | null {
+  // Primero verificar si viene directamente en el payload
+  if (data.conversationId) return data.conversationId
+  
+  // Luego buscar en las estructuras anidadas
   const remote = data.key?.remoteJid || data.remoteJid || data.from || data.to
   if (remote) return remote
   if (data.contact?.id) return data.contact.id
   if (data.projectId && data.ref?.id) {
     return `${data.projectId}:${data.ref.id}`
   }
+  // Si no hay nada, usar el 'from' como fallback
+  if (data.from) return data.from
   return null
 }
 
@@ -493,8 +499,23 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
   const text = extractText(data)
   const conversationId = extractConversationId(data)
 
+  console.log('[ingestBuilderbotEvent] extracción:', {
+    text: text || 'NO ENCONTRADO',
+    conversationId: conversationId || 'NO ENCONTRADO',
+    dataKeys: Object.keys(data),
+    hasBody: !!data.body,
+    hasFrom: !!data.from,
+    hasConversationId: !!data.conversationId,
+  })
+
   if (!text || !conversationId) {
-    console.warn('Builderbot webhook sin texto o conversationId', { eventName, data })
+    console.warn('❌ Builderbot webhook sin texto o conversationId', { 
+      eventName, 
+      text: text || 'FALTA TEXTO',
+      conversationId: conversationId || 'FALTA CONVERSATION_ID',
+      dataKeys: Object.keys(data),
+      dataSample: JSON.stringify(data).substring(0, 200)
+    })
     return
   }
 
@@ -510,9 +531,11 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
     conversationId,
     from,
     text,
+    name,
+    phone,
   })
 
-  await storeMessage({
+  const storedMessage = await storeMessage({
     conversationId,
     from,
     text,
@@ -523,6 +546,12 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
     contactName: name,
     contactPhone: phone,
   })
+
+  if (storedMessage) {
+    console.log('✅ Mensaje almacenado exitosamente:', storedMessage.id)
+  } else {
+    console.error('❌ Error: storeMessage retornó null')
+  }
 }
 
 export async function resetWhatsAppStore() {
