@@ -84,8 +84,15 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
    - `UPSTASH_REDIS_REST_TOKEN`: **REQUERIDO** - Token de tu instancia de Redis Upstash
    - `BUILDERBOT_BASE_URL`: Opcional - URL base (default: https://app.builderbot.cloud)
 4. Configura el webhook en BuilderBot apuntando a: `https://tu-dominio.vercel.app/api/webhooks/builderbot`
-5. Verifica la configuración visitando: `https://tu-dominio.vercel.app/api/health/builderbot`
+5. **Verifica la configuración:**
+   - Diagnóstico: `https://tu-dominio.vercel.app/api/health/builderbot` (debe mostrar `"configured": true`)
+   - Prueba de envío: `https://tu-dominio.vercel.app/api/test/send-message?number=+5491133788190&message=Hola`
 6. Deploy automático
+
+**⚠️ IMPORTANTE:** Si los mensajes no se envían, verifica:
+- Que `BUILDERBOT_BOT_ID` y `BUILDERBOT_API_KEY` estén configurados en Vercel
+- Que las variables estén disponibles en el entorno de producción (no solo preview)
+- Revisa los logs en Vercel (Functions → Logs) para ver errores detallados
 
 ### Railway
 1. Conecta el repositorio a Railway

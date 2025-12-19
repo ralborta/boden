@@ -169,13 +169,15 @@ export async function POST(request: NextRequest) {
 
     // Verificar configuración de BuilderBot antes de intentar enviar
     const hasBuilderBotConfig = !!(process.env.BUILDERBOT_BOT_ID && process.env.BUILDERBOT_API_KEY)
-    console.log('[POST /api/whatsapp/messages] Configuración BuilderBot:', {
+    const configStatus = {
       hasBOT_ID: !!process.env.BUILDERBOT_BOT_ID,
       hasAPI_KEY: !!process.env.BUILDERBOT_API_KEY,
       BOT_ID_length: process.env.BUILDERBOT_BOT_ID?.length || 0,
       API_KEY_length: process.env.BUILDERBOT_API_KEY?.length || 0,
       BUILDERBOT_BASE_URL: process.env.BUILDERBOT_BASE_URL || 'https://app.builderbot.cloud (default)',
-    })
+      environment: process.env.VERCEL ? 'Vercel' : process.env.RAILWAY_ENVIRONMENT ? 'Railway' : 'Local',
+    }
+    console.log('[POST /api/whatsapp/messages] Configuración BuilderBot:', configStatus)
 
     // Intentar enviar a BuilderBot Cloud API v2 usando el código que funciona
     if (hasBuilderBotConfig) {
@@ -252,10 +254,31 @@ export async function POST(request: NextRequest) {
         )
       }
     } else {
-      console.warn('[POST /api/whatsapp/messages] ⚠️ BuilderBot no configurado. Variables faltantes:', {
+      const missingVars = []
+      if (!process.env.BUILDERBOT_BOT_ID) missingVars.push('BUILDERBOT_BOT_ID')
+      if (!process.env.BUILDERBOT_API_KEY) missingVars.push('BUILDERBOT_API_KEY')
+      
+      console.error('[POST /api/whatsapp/messages] ❌ BuilderBot NO CONFIGURADO:', {
         missing_BOT_ID: !process.env.BUILDERBOT_BOT_ID,
         missing_API_KEY: !process.env.BUILDERBOT_API_KEY,
+        environment: process.env.VERCEL ? 'Vercel' : process.env.RAILWAY_ENVIRONMENT ? 'Railway' : 'Local',
+        message: `Faltan las siguientes variables de entorno: ${missingVars.join(', ')}`,
       })
+      
+      // Retornar error explícito para que el usuario sepa qué falta
+      return NextResponse.json(
+        {
+          message: 'BuilderBot no está configurado',
+          error: `Faltan las siguientes variables de entorno: ${missingVars.join(', ')}`,
+          details: {
+            missing_BOT_ID: !process.env.BUILDERBOT_BOT_ID,
+            missing_API_KEY: !process.env.BUILDERBOT_API_KEY,
+            environment: process.env.VERCEL ? 'Vercel' : process.env.RAILWAY_ENVIRONMENT ? 'Railway' : 'Local',
+            suggestion: 'Configura BUILDERBOT_BOT_ID y BUILDERBOT_API_KEY en las variables de entorno de Vercel',
+          },
+        },
+        { status: 500 }
+      )
     }
 
     // Si llegamos aquí, BuilderBot no está configurado o falló
