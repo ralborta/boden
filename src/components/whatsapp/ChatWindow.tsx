@@ -59,19 +59,29 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
     if (!conversationId) return
 
     // No mostrar loading si ya hay mensajes (para evitar parpadeos)
-    if (messages.length === 0) {
+    const wasEmpty = messages.length === 0
+    if (wasEmpty) {
       setIsLoadingMessages(true)
     }
     setErrorMessages(null)
     try {
       const data = await fetchWhatsAppMessages(conversationId)
-      // Solo actualizar si hay cambios (comparar por cantidad y último mensaje)
-      const hasChanges = 
-        data.length !== messages.length ||
-        (data.length > 0 && messages.length > 0 && 
-         data[data.length - 1]?.id !== messages[messages.length - 1]?.id)
       
-      if (hasChanges) {
+      // Comparar de manera más robusta: por IDs de todos los mensajes
+      const currentIds = new Set(messages.map(m => m.id))
+      const newIds = new Set(data.map(m => m.id))
+      const hasChanges = 
+        currentIds.size !== newIds.size ||
+        ![...newIds].every(id => currentIds.has(id)) ||
+        ![...currentIds].every(id => newIds.has(id))
+      
+      if (hasChanges || wasEmpty) {
+        console.log('[ChatWindow] Actualizando mensajes:', {
+          anteriores: messages.length,
+          nuevos: data.length,
+          idsAnteriores: [...currentIds],
+          idsNuevos: [...newIds]
+        })
         setMessages(data)
       }
     } catch (error) {
@@ -96,8 +106,9 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
 
     try {
       const newMessage = await sendWhatsAppMessage(conversationId, textToSend)
-      // Agregar mensaje de manera optimista
-      setMessages((prev) => [...prev, newMessage])
+      // Recargar mensajes inmediatamente después de enviar (no solo agregar optimistamente)
+      // Esto asegura que tenemos la versión correcta desde Redis
+      await loadMessages()
     } catch (error) {
       // Restaurar texto si hay error
       setMessageText(textToSend)
