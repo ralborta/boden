@@ -398,23 +398,43 @@ function storeMessageMemory({
 
 export async function getConversations(): Promise<WhatsAppConversation[]> {
   await ensureSeeded()
+  
+  console.log('[getConversations] Redis configurado:', !!redis, 'isVercel:', process.env.VERCEL === '1', 'isRailway:', Boolean(process.env.RAILWAY_ENVIRONMENT))
+  
   const conversationsList = redis
     ? await getRedisConversations()
     : getMemoryConversations()
 
+  console.log('[getConversations] Total conversaciones encontradas:', conversationsList.length)
+  
   return conversationsList.sort(
     (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
   )
 }
 
 async function getRedisConversations(): Promise<WhatsAppConversation[]> {
-  if (!redis) return []
-  const raw = await redis.hvals(CONVERSATIONS_KEY)
-  return raw.map((value: string | unknown) => 
-    typeof value === 'string' 
-      ? (JSON.parse(value) as WhatsAppConversation)
-      : (value as WhatsAppConversation)
-  )
+  if (!redis) {
+    console.warn('[getRedisConversations] Redis no está configurado')
+    return []
+  }
+  
+  try {
+    console.log('[getRedisConversations] Leyendo desde Redis, key:', CONVERSATIONS_KEY)
+    const raw = await redis.hvals(CONVERSATIONS_KEY)
+    console.log('[getRedisConversations] Valores encontrados en Redis:', raw?.length || 0)
+    
+    const conversations = raw.map((value: string | unknown) => 
+      typeof value === 'string' 
+        ? (JSON.parse(value) as WhatsAppConversation)
+        : (value as WhatsAppConversation)
+    )
+    
+    console.log('[getRedisConversations] Conversaciones parseadas:', conversations.length)
+    return conversations
+  } catch (error) {
+    console.error('[getRedisConversations] Error leyendo desde Redis:', error)
+    return []
+  }
 }
 
 function getMemoryConversations(): WhatsAppConversation[] {
@@ -423,17 +443,40 @@ function getMemoryConversations(): WhatsAppConversation[] {
 
 export async function getMessages(conversationId: string): Promise<WhatsAppMessage[]> {
   await ensureSeeded()
-  return redis ? getRedisMessages(conversationId) : getMemoryMessages(conversationId)
+  
+  console.log('[getMessages] conversationId:', conversationId, 'Redis configurado:', !!redis)
+  
+  const messages = redis ? await getRedisMessages(conversationId) : getMemoryMessages(conversationId)
+  
+  console.log('[getMessages] Total mensajes encontrados:', messages.length)
+  
+  return messages
 }
 
 async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage[]> {
-  if (!redis) return []
-  const raw = await redis.lrange(getMessagesKey(conversationId), 0, -1)
-  return raw.map((value: string | unknown) => 
-    typeof value === 'string' 
-      ? (JSON.parse(value) as WhatsAppMessage)
-      : (value as WhatsAppMessage)
-  )
+  if (!redis) {
+    console.warn('[getRedisMessages] Redis no está configurado')
+    return []
+  }
+  
+  try {
+    const messagesKey = getMessagesKey(conversationId)
+    console.log('[getRedisMessages] Leyendo desde Redis, key:', messagesKey)
+    const raw = await redis.lrange(messagesKey, 0, -1)
+    console.log('[getRedisMessages] Valores encontrados en Redis:', raw?.length || 0)
+    
+    const messages = raw.map((value: string | unknown) => 
+      typeof value === 'string' 
+        ? (JSON.parse(value) as WhatsAppMessage)
+        : (value as WhatsAppMessage)
+    )
+    
+    console.log('[getRedisMessages] Mensajes parseados:', messages.length)
+    return messages
+  } catch (error) {
+    console.error('[getRedisMessages] Error leyendo desde Redis:', error)
+    return []
+  }
 }
 
 function getMemoryMessages(conversationId: string): WhatsAppMessage[] {
