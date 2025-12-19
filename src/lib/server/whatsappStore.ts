@@ -445,16 +445,6 @@ type BuilderbotEvent = {
   data?: Record<string, any>
 }
 
-export class BuilderbotPayloadError extends Error {
-  details?: Record<string, any>
-
-  constructor(message: string, details?: Record<string, any>) {
-    super(message)
-    this.name = 'BuilderbotPayloadError'
-    this.details = details
-  }
-}
-
 function extractText(data: Record<string, any>): string | undefined {
   return (
     data.message?.extendedTextMessage?.text ||
@@ -462,35 +452,17 @@ function extractText(data: Record<string, any>): string | undefined {
     data.answer ||
     data.body ||
     data.text ||
-    data.content ||
     data.message?.extendedTextMessage?.caption
   )
 }
 
 function extractConversationId(data: Record<string, any>): string | null {
-  const candidates = [
-    data.key?.remoteJid,
-    data.remoteJid,
-    data.chatId,
-    data.chat?.id,
-    data.conversationId,
-    data.conversation?.id,
-    data.threadId,
-    data.waId,
-    data.from,
-    data.to,
-    data.contact?.id,
-    data.contact?.phone,
-    data.phone,
-  ]
-
-  const found = candidates.find((value) => typeof value === 'string' && value.trim() !== '')
-  if (found) return found
-
+  const remote = data.key?.remoteJid || data.remoteJid || data.from || data.to
+  if (remote) return remote
+  if (data.contact?.id) return data.contact.id
   if (data.projectId && data.ref?.id) {
     return `${data.projectId}:${data.ref.id}`
   }
-
   return null
 }
 
@@ -512,25 +484,14 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
   const conversationId = extractConversationId(data)
 
   if (!text || !conversationId) {
-    console.error('Builderbot webhook sin texto o conversationId', {
-      eventName,
-      hasText: Boolean(text),
-      conversationId,
-      dataKeys: Object.keys(data ?? {}),
-    })
-    throw new BuilderbotPayloadError(
-      !text
-        ? 'El webhook de Builderbot no incluye texto para almacenar'
-        : 'El webhook de Builderbot no incluye un identificador de conversación',
-      { eventName, conversationId, dataKeys: Object.keys(data ?? {}) }
-    )
+    console.warn('Builderbot webhook sin texto o conversationId', { eventName, data })
+    return
   }
 
   const from =
     eventName === 'message.incoming' || data.fromMe === false ? 'customer' : 'agent'
-  const rawPhone = data.key?.remoteJid || data.remoteJid || data.from || data.to
-  const phone = normalizePhone(rawPhone || conversationId)
-  const name = data.name || data.contactName || data.contact?.name || phone
+  const phone = normalizePhone(data.key?.remoteJid || data.remoteJid || data.from)
+  const name = data.name || data.contactName || phone
   const timestamp = data.messageTimestamp
     ? toIsoString(Number(data.messageTimestamp))
     : undefined

@@ -25,6 +25,13 @@ export default function ConversationList({
 
   useEffect(() => {
     loadConversations()
+    
+    // Polling para actualizar conversaciones cada 5 segundos
+    const interval = setInterval(() => {
+      loadConversations()
+    }, 5000)
+    
+    return () => clearInterval(interval)
   }, [])
 
   const loadConversations = async () => {

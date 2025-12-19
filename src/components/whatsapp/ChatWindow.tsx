@@ -25,6 +25,13 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
     if (conversationId) {
       loadConversation()
       loadMessages()
+      
+      // Polling para actualizar mensajes cada 3 segundos
+      const interval = setInterval(() => {
+        loadMessages()
+      }, 3000)
+      
+      return () => clearInterval(interval)
     } else {
       setMessages([])
       setConversation(null)

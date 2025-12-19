@@ -45,45 +45,76 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 
 ## Variables de Entorno
 
+### Desarrollo Local
 - `BUILDERBOT_API_URL`: URL de la API de BuilderBot (default: http://localhost:3001)
 - `WHATSAPP_API_URL`: URL de la API de WhatsApp (opcional)
-- `UPSTASH_REDIS_REST_URL`: URL del endpoint REST de Upstash Redis (opcional)
-- `UPSTASH_REDIS_REST_TOKEN`: Token del endpoint de Upstash Redis (opcional)
+- `BUILDERBOT_WHATSAPP_API_URL`: URL alternativa de WhatsApp API (opcional)
 
-Si configurás las variables de Upstash Redis, las conversaciones y mensajes de WhatsApp se persisten allí. Si no, la app usa un almacén en memoria pensado solo para desarrollo local.
+### Producción (Vercel)
+- `BUILDERBOT_API_URL`: URL de la API de BuilderBot
+- `UPSTASH_REDIS_REST_URL`: URL de Redis Upstash (requerido en producción)
+- `UPSTASH_REDIS_REST_TOKEN`: Token de Redis Upstash (requerido en producción)
+
+### Producción (Railway)
+- `VERCEL_WEBHOOK_URL`: URL completa de Vercel para reenviar webhooks (ej: `https://tu-dominio.vercel.app` o `https://tu-dominio.vercel.app/api/webhooks/builderbot`)
+- `BUILDERBOT_API_URL`: URL de la API de BuilderBot (opcional)
+
+**Nota:** 
+- BuilderBot envía webhooks a Railway
+- Railway reenvía automáticamente los webhooks a Vercel (si `VERCEL_WEBHOOK_URL` está configurada)
+- Vercel procesa y almacena los mensajes en Redis
 
 ## Deploy
 
 ### Vercel (Recomendado)
 1. Conecta el repositorio a Vercel
 2. Vercel detectará automáticamente Next.js
-3. Configura las variables de entorno
-4. Deploy automático
+3. Configura las variables de entorno en **Settings → Environment Variables**:
+   - `BUILDERBOT_API_URL`: URL de tu API de BuilderBot
+   - `UPSTASH_REDIS_REST_URL`: URL de tu instancia de Redis Upstash (requerido)
+   - `UPSTASH_REDIS_REST_TOKEN`: Token de tu instancia de Redis Upstash (requerido)
+4. Configura el webhook en BuilderBot/Railway apuntando a: `https://tu-dominio.vercel.app/api/webhooks/builderbot`
+5. Deploy automático
 
 ### Railway
 1. Conecta el repositorio a Railway
 2. Railway detectará automáticamente Next.js
-3. Configura las variables de entorno
-4. El servidor se iniciará automáticamente
+3. Configura las variables de entorno en Railway:
+   - `VERCEL_WEBHOOK_URL`: URL de tu aplicación en Vercel (ej: `https://tu-dominio.vercel.app`)
+   - `BUILDERBOT_API_URL`: URL de tu API de BuilderBot (opcional)
+4. Configura el webhook en BuilderBot apuntando a: `https://tu-app.railway.app/api/webhooks/builderbot`
+5. El servidor se iniciará automáticamente
 
 ## Webhooks de Builderbot
 
 El webhook está configurado como una API Route de Next.js:
 - `POST /api/webhooks/builderbot`
 
-**URL del webhook para Builderbot:**
+### Flujo de Webhooks
+
 ```
-https://tu-dominio.vercel.app/api/webhooks/builderbot
+BuilderBot → Railway (/api/webhooks/builderbot) → Vercel (/api/webhooks/builderbot) → Redis
 ```
-o
-```
-https://tu-app.railway.app/api/webhooks/builderbot
-```
+
+**Configuración:**
+1. En BuilderBot, configura el webhook apuntando a Railway:
+   ```
+   https://tu-app.railway.app/api/webhooks/builderbot
+   ```
+
+2. En Railway, configura la variable `VERCEL_WEBHOOK_URL`:
+   ```
+   https://tu-dominio.vercel.app
+   ```
+   (Railway reenviará automáticamente los webhooks a Vercel)
 
 **Eventos soportados:**
 - `message.incoming` - Mensaje entrante
 - `message.outgoing` - Mensaje saliente
 - `message.calling` - Llamada
 
-Configura esta URL en Builderbot como webhook para recibir eventos en tiempo real.
+**Nota:** Si solo usas Vercel (sin Railway), configura el webhook directamente en BuilderBot apuntando a:
+```
+https://tu-dominio.vercel.app/api/webhooks/builderbot
+```
 

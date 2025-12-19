@@ -3,9 +3,6 @@ import type { WhatsAppMessage } from '@/types/whatsapp'
 import { getMessages, storeMessage } from '@/lib/server/whatsappStore'
 
 const WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || process.env.BUILDERBOT_WHATSAPP_API_URL
-const REMOTE_WHATSAPP_API_URL =
-  process.env.REMOTE_WHATSAPP_API_URL ||
-  (process.env.VERCEL === '1' ? 'https://boden-production.up.railway.app/api/whatsapp' : '')
 
 // Datos mock para desarrollo
 const mockMessages: Record<string, WhatsAppMessage[]> = {
@@ -123,25 +120,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Los datos vienen vía webhook y se almacenan en Redis/memoria
+    // No necesitamos hacer fetch a Railway
     const storedMessages = await getMessages(conversationId)
     if (storedMessages.length > 0) {
       return NextResponse.json(storedMessages)
-    }
-
-    if (REMOTE_WHATSAPP_API_URL) {
-      const response = await fetch(
-        `${REMOTE_WHATSAPP_API_URL}/messages?conversationId=${conversationId}`,
-        {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          cache: 'no-store',
-        }
-      )
-
-      if (response.ok) {
-        const data = await response.json()
-        return NextResponse.json(data)
-      }
     }
 
     if (!WHATSAPP_API_URL) {
