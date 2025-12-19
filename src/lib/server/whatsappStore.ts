@@ -354,7 +354,26 @@ async function storeMessageRedis({
   }
 
   await redis.hset(CONVERSATIONS_KEY, { [conversationId]: JSON.stringify(conversation) })
-  await redis.rpush(getMessagesKey(conversationId), JSON.stringify(message))
+  
+  // Verificar si el mensaje ya existe antes de agregarlo (evitar duplicados)
+  const messagesKey = getMessagesKey(conversationId)
+  const existingMessages = await redis.lrange(messagesKey, 0, -1)
+  const messageExists = existingMessages.some((msg: string | unknown) => {
+    try {
+      const parsed = typeof msg === 'string' ? JSON.parse(msg) : msg
+      return parsed.id === message.id
+    } catch {
+      return false
+    }
+  })
+  
+  if (!messageExists) {
+    await redis.rpush(messagesKey, JSON.stringify(message))
+    console.log('[storeMessageRedis] Mensaje nuevo almacenado:', message.id)
+  } else {
+    console.log('[storeMessageRedis] Mensaje ya existe, omitiendo duplicado:', message.id)
+  }
+  
   await redis.sadd(MESSAGE_INDEX_KEY, conversationId)
 
   return message

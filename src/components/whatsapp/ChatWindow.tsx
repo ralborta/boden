@@ -26,10 +26,10 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
       loadConversation()
       loadMessages()
       
-      // Polling para actualizar mensajes cada 3 segundos
+      // Polling para actualizar mensajes cada 5 segundos (reducido para evitar loops)
       const interval = setInterval(() => {
         loadMessages()
-      }, 3000)
+      }, 5000)
       
       return () => clearInterval(interval)
     } else {
@@ -58,11 +58,22 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
   const loadMessages = async () => {
     if (!conversationId) return
 
-    setIsLoadingMessages(true)
+    // No mostrar loading si ya hay mensajes (para evitar parpadeos)
+    if (messages.length === 0) {
+      setIsLoadingMessages(true)
+    }
     setErrorMessages(null)
     try {
       const data = await fetchWhatsAppMessages(conversationId)
-      setMessages(data)
+      // Solo actualizar si hay cambios (comparar por cantidad y último mensaje)
+      const hasChanges = 
+        data.length !== messages.length ||
+        (data.length > 0 && messages.length > 0 && 
+         data[data.length - 1]?.id !== messages[messages.length - 1]?.id)
+      
+      if (hasChanges) {
+        setMessages(data)
+      }
     } catch (error) {
       setErrorMessages(
         error instanceof Error ? error.message : 'No se pudieron cargar los mensajes'
