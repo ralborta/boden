@@ -22,16 +22,36 @@ export type RecordMessageInput = {
 
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+
+// Validar que las credenciales estén completas
+const hasValidRedisConfig = !!(redisUrl && redisToken)
+const redisUrlValid = redisUrl && redisUrl.startsWith('https://')
+const redisTokenValid = redisToken && redisToken.length > 10
+
 console.log(
-  '[whatsappStore] Redis config -> hasUrl:',
-  !!redisUrl,
-  'hasToken:',
-  !!redisToken,
-  'NODE_ENV:',
-  process.env.NODE_ENV
+  '[whatsappStore] Redis config ->',
+  {
+    hasUrl: !!redisUrl,
+    urlValid: redisUrlValid,
+    hasToken: !!redisToken,
+    tokenValid: redisTokenValid,
+    hasValidConfig: hasValidRedisConfig,
+    NODE_ENV: process.env.NODE_ENV,
+    isVercel: process.env.VERCEL === '1',
+    isRailway: Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT_NAME),
+  }
 )
-const redis =
-  redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null
+
+if (!hasValidRedisConfig) {
+  console.error('❌ [whatsappStore] Redis no configurado correctamente:', {
+    hasUrl: !!redisUrl,
+    urlValid: redisUrlValid,
+    hasToken: !!redisToken,
+    tokenValid: redisTokenValid,
+  })
+}
+
+const redis = hasValidRedisConfig ? new Redis({ url: redisUrl!, token: redisToken! }) : null
 
 const isHostedProduction =
   process.env.VERCEL === '1' ||
@@ -432,7 +452,15 @@ async function getRedisConversations(): Promise<WhatsAppConversation[]> {
     console.log('[getRedisConversations] Conversaciones parseadas:', conversations.length)
     return conversations
   } catch (error) {
-    console.error('[getRedisConversations] Error leyendo desde Redis:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('❌ [getRedisConversations] Error leyendo desde Redis:', {
+      error: errorMessage,
+      isUpstashError: errorMessage.includes('UpstashError'),
+      isWrongPass: errorMessage.includes('WRONGPASS'),
+      suggestion: errorMessage.includes('WRONGPASS') 
+        ? 'Verifica que UPSTASH_REDIS_REST_TOKEN esté correctamente configurado en Vercel'
+        : 'Verifica la configuración de Redis'
+    })
     return []
   }
 }
@@ -474,7 +502,15 @@ async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage
     console.log('[getRedisMessages] Mensajes parseados:', messages.length)
     return messages
   } catch (error) {
-    console.error('[getRedisMessages] Error leyendo desde Redis:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('❌ [getRedisMessages] Error leyendo desde Redis:', {
+      error: errorMessage,
+      isUpstashError: errorMessage.includes('UpstashError'),
+      isWrongPass: errorMessage.includes('WRONGPASS'),
+      suggestion: errorMessage.includes('WRONGPASS') 
+        ? 'Verifica que UPSTASH_REDIS_REST_TOKEN esté correctamente configurado en Vercel'
+        : 'Verifica la configuración de Redis'
+    })
     return []
   }
 }
