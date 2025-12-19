@@ -130,28 +130,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(storedMessages)
     }
 
-    if (!WHATSAPP_API_URL) {
-      // Retornar datos mock si no hay API configurada
-      const messages = mockMessages[conversationId] || []
-      return NextResponse.json(messages)
-    }
-
-    const response = await fetch(
-      `${WHATSAPP_API_URL}/conversations/${conversationId}/messages`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error('Error fetching messages')
-    }
-
-    const data = await response.json()
-    return NextResponse.json(data)
+    // Retornar datos mock solo en desarrollo si no hay mensajes almacenados
+    const messages = mockMessages[conversationId] || []
+    return NextResponse.json(messages)
   } catch (error) {
     console.error('Error in GET /api/whatsapp/messages:', error)
 
@@ -249,13 +230,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Fallback: crear mensaje mock si no se pudo almacenar
+    // Si llegamos aquí, BuilderBot falló pero almacenamos localmente
+    const hasBuilderBotConfig = !!(process.env.BUILDERBOT_BOT_ID && process.env.BUILDERBOT_API_KEY)
     const newMessage: WhatsAppMessage = {
       id: `m${Date.now()}`,
       conversationId: normalizedConversationId,
       from: 'agent',
       text,
       sentAt: new Date().toISOString(),
-      delivered: WHATSAPP_API_URL ? false : true, // Si no hay API, marcamos como entregado
+      delivered: !hasBuilderBotConfig, // Si no hay BuilderBot configurado, marcamos como entregado
       read: false,
     }
 
