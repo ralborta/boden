@@ -40,11 +40,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'data is required' }, { status: 400 })
     }
 
-    // Si tenemos URL de Vercel configurada Y no estamos en Vercel, reenviar
-    // (Esto cubre el caso de Railway, pero también cualquier otro servidor)
+    // NOTA: Reenvío a Vercel desactivado porque Vercel tiene Deployment Protection activada
+    // Railway procesa los mensajes localmente (en memoria o Redis si está configurado)
+    // Si necesitas que Vercel también reciba los webhooks, configura BuilderBot para
+    // enviar directamente a Vercel también (además de Railway)
+    // 
+    // Para activar el reenvío, descomenta el código de abajo y asegúrate de:
+    // 1. Desactivar Deployment Protection en Vercel, O
+    // 2. Usar la URL de producción (no preview) de Vercel
+    /*
     if (VERCEL_WEBHOOK_URL && !isVercel) {
       try {
-        // Asegurar que la URL tenga protocolo https://
         let baseUrl = VERCEL_WEBHOOK_URL.trim()
         if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
           baseUrl = `https://${baseUrl}`
@@ -55,56 +61,27 @@ export async function POST(req: NextRequest) {
           : `${baseUrl.replace(/\/$/, '')}/api/webhooks/builderbot`
         
         console.log('🔄 Reenviando webhook a Vercel:', vercelUrl)
-        console.log('🔄 Payload:', JSON.stringify(body, null, 2))
         
-        // Crear timeout manual para compatibilidad
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 10000)
-        
-        try {
-          const forwardResponse = await fetch(vercelUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': 'Boden-Railway-Forwarder/1.0',
-            },
-            body: JSON.stringify(body),
-            signal: controller.signal,
-          })
-          
-          clearTimeout(timeoutId)
+        const forwardResponse = await fetch(vercelUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Boden-Railway-Forwarder/1.0',
+          },
+          body: JSON.stringify(body),
+        })
 
-          const responseText = await forwardResponse.text()
-          
-          if (forwardResponse.ok) {
-            console.log('✅ Webhook reenviado exitosamente a Vercel')
-            console.log('✅ Respuesta de Vercel:', responseText)
-          } else {
-            console.error('❌ Error al reenviar webhook a Vercel:', {
-              status: forwardResponse.status,
-              statusText: forwardResponse.statusText,
-              response: responseText,
-            })
-          }
-        } catch (fetchError) {
-          clearTimeout(timeoutId)
-          throw fetchError
+        if (forwardResponse.ok) {
+          console.log('✅ Webhook reenviado exitosamente a Vercel')
+        } else {
+          const errorText = await forwardResponse.text()
+          console.error('❌ Error al reenviar webhook a Vercel:', forwardResponse.status, errorText)
         }
       } catch (forwardError) {
-        console.error('❌ Error al reenviar webhook a Vercel:', {
-          error: forwardError instanceof Error ? forwardError.message : String(forwardError),
-          stack: forwardError instanceof Error ? forwardError.stack : undefined,
-        })
-        // Continuar procesando localmente aunque falle el reenvío
-      }
-    } else {
-      if (!VERCEL_WEBHOOK_URL) {
-        console.log('ℹ️ No hay VERCEL_WEBHOOK_URL configurada, no se reenviará a Vercel')
-      }
-      if (isVercel) {
-        console.log('ℹ️ Ya estamos en Vercel, no se reenviará')
+        console.error('❌ Error al reenviar webhook a Vercel:', forwardError)
       }
     }
+    */
 
     // Procesar y almacenar el evento localmente
     // (En Railway esto será en memoria, en Vercel será en Redis)
