@@ -579,10 +579,32 @@ async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage
     })
     
     const deduplicated = Array.from(uniqueMessages.values())
-    // Ordenar por fecha
-    deduplicated.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime())
+    // Ordenar por fecha (más antiguos primero)
+    deduplicated.sort((a, b) => {
+      const timeA = new Date(a.sentAt).getTime()
+      const timeB = new Date(b.sentAt).getTime()
+      // Si tienen el mismo timestamp, ordenar por ID para mantener consistencia
+      if (timeA === timeB) {
+        return a.id.localeCompare(b.id)
+      }
+      return timeA - timeB
+    })
     
     console.log('[getRedisMessages] Mensajes parseados:', messages.length, 'después de deduplicar:', deduplicated.length)
+    if (deduplicated.length > 0) {
+      console.log('[getRedisMessages] Primer mensaje:', {
+        id: deduplicated[0].id,
+        from: deduplicated[0].from,
+        sentAt: deduplicated[0].sentAt,
+        text: deduplicated[0].text.substring(0, 30)
+      })
+      console.log('[getRedisMessages] Último mensaje:', {
+        id: deduplicated[deduplicated.length - 1].id,
+        from: deduplicated[deduplicated.length - 1].from,
+        sentAt: deduplicated[deduplicated.length - 1].sentAt,
+        text: deduplicated[deduplicated.length - 1].text.substring(0, 30)
+      })
+    }
     return deduplicated
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -599,7 +621,17 @@ async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage
 }
 
 function getMemoryMessages(conversationId: string): WhatsAppMessage[] {
-  return memoryConversations.get(conversationId)?.messages ?? []
+  const messages = memoryConversations.get(conversationId)?.messages ?? []
+  // Ordenar por fecha (más antiguos primero)
+  return messages.sort((a, b) => {
+    const timeA = new Date(a.sentAt).getTime()
+    const timeB = new Date(b.sentAt).getTime()
+    // Si tienen el mismo timestamp, ordenar por ID para mantener consistencia
+    if (timeA === timeB) {
+      return a.id.localeCompare(b.id)
+    }
+    return timeA - timeB
+  })
 }
 
 export function normalizePhone(value?: string) {
@@ -695,9 +727,11 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
     eventName === 'message.incoming' || data.fromMe === false ? 'customer' : 'agent'
   const phone = normalizePhone(data.key?.remoteJid || data.remoteJid || data.from)
   const name = data.name || data.contactName || phone
+  // Usar messageTimestamp si está disponible, sino usar el timestamp actual
+  // messageTimestamp viene en segundos desde epoch, necesitamos convertirlo a milisegundos
   const timestamp = data.messageTimestamp
-    ? toIsoString(Number(data.messageTimestamp))
-    : undefined
+    ? toIsoString(Number(data.messageTimestamp) * 1000)
+    : Date.now()
 
   console.log('[ingestBuilderbotEvent] almacenando mensaje', {
     conversationId,
