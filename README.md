@@ -56,13 +56,16 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 - `UPSTASH_REDIS_REST_TOKEN`: Token de Redis Upstash (requerido en producción)
 
 ### Producción (Railway)
-- `VERCEL_WEBHOOK_URL`: URL completa de Vercel para reenviar webhooks (ej: `https://tu-dominio.vercel.app` o `https://tu-dominio.vercel.app/api/webhooks/builderbot`)
+- `UPSTASH_REDIS_REST_URL`: **MISMA URL que en Vercel** (requerido para compartir datos)
+- `UPSTASH_REDIS_REST_TOKEN`: **MISMO TOKEN que en Vercel** (requerido para compartir datos)
+- `VERCEL_WEBHOOK_URL`: URL de Vercel (opcional, solo si quieres reenviar webhooks)
 - `BUILDERBOT_API_URL`: URL de la API de BuilderBot (opcional)
 
 **Nota:** 
 - BuilderBot envía webhooks a Railway
-- Railway reenvía automáticamente los webhooks a Vercel (si `VERCEL_WEBHOOK_URL` está configurada)
-- Vercel procesa y almacena los mensajes en Redis
+- Railway procesa y almacena los mensajes en Redis (Upstash compartido)
+- Vercel lee los mensajes desde el mismo Redis compartido
+- **IMPORTANTE:** Railway y Vercel deben usar las MISMAS credenciales de Redis para compartir datos
 
 ## Deploy
 
@@ -80,21 +83,32 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 1. Conecta el repositorio a Railway
 2. Railway detectará automáticamente Next.js
 3. Configura las variables de entorno en Railway:
-   - `VERCEL_WEBHOOK_URL`: URL de tu aplicación en Vercel (ej: `https://tu-dominio.vercel.app`)
+   - `UPSTASH_REDIS_REST_URL`: **MISMA URL que configuraste en Vercel** (requerido)
+   - `UPSTASH_REDIS_REST_TOKEN`: **MISMO TOKEN que configuraste en Vercel** (requerido)
+   - `VERCEL_WEBHOOK_URL`: URL de tu aplicación en Vercel (opcional)
    - `BUILDERBOT_API_URL`: URL de tu API de BuilderBot (opcional)
 4. Configura el webhook en BuilderBot apuntando a: `https://tu-app.railway.app/api/webhooks/builderbot`
 5. El servidor se iniciará automáticamente
+
+**IMPORTANTE:** Railway y Vercel deben usar las **MISMAS** credenciales de Redis (Upstash) para que ambos puedan leer y escribir en la misma base de datos.
 
 ## Webhooks de Builderbot
 
 El webhook está configurado como una API Route de Next.js:
 - `POST /api/webhooks/builderbot`
 
-### Flujo de Webhooks
+### Flujo de Webhooks y Datos
 
 ```
-BuilderBot → Railway (/api/webhooks/builderbot) → Vercel (/api/webhooks/builderbot) → Redis
+BuilderBot → Railway (/api/webhooks/builderbot) → Redis (Upstash compartido)
+                                                         ↓
+                                                    Vercel lee desde Redis
 ```
+
+**Arquitectura:**
+- Railway recibe webhooks de BuilderBot y los almacena en Redis
+- Vercel lee los mensajes desde el mismo Redis compartido
+- Ambos usan las mismas credenciales de Upstash Redis
 
 **Configuración:**
 1. En BuilderBot, configura el webhook apuntando a Railway:
