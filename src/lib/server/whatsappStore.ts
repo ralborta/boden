@@ -22,6 +22,7 @@ export type RecordMessageInput = {
   mediaType?: 'image' | 'video' | 'document' | 'audio' | 'sticker'
   mediaMimeType?: string
   caption?: string
+  mediaKey?: string
 }
 
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL
