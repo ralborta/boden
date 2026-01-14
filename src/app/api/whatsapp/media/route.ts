@@ -188,7 +188,12 @@ export async function GET(request: NextRequest) {
             // Si tenemos mediaKey, intentar desencriptar
             if (mediaKey) {
               try {
-                console.log('[Media Proxy] Intentando desencriptar archivo usando mediaKey...')
+                console.log('[Media Proxy] Intentando desencriptar archivo usando mediaKey...', {
+                  mediaKeyLength: mediaKey.length,
+                  mediaKeyPreview: mediaKey.substring(0, 20) + '...',
+                  encryptedSize: encryptedData.length,
+                  hasMediaType: !!mediaType,
+                })
                 
                 // Usar el mediaType del parámetro o determinar basado en content-type
                 let decryptMediaType: 'image' | 'video' | 'document' | 'audio' | 'sticker' = mediaType || 'image'
@@ -199,13 +204,37 @@ export async function GET(request: NextRequest) {
                   else if (contentType.includes('webp') && finalUrl.includes('sticker')) decryptMediaType = 'sticker'
                 }
                 
+                console.log('[Media Proxy] Tipo de media para desencriptación:', decryptMediaType)
+                
                 const decryptedData = decryptWhatsAppMedia(encryptedData, mediaKey, decryptMediaType)
-                console.log('[Media Proxy] ✅ Archivo desencriptado exitosamente, tamaño original:', encryptedData.length, 'bytes, tamaño desencriptado:', decryptedData.length, 'bytes')
+                console.log('[Media Proxy] ✅ Archivo desencriptado exitosamente:', {
+                  tamañoOriginal: encryptedData.length,
+                  tamañoDesencriptado: decryptedData.length,
+                  diferencia: encryptedData.length - decryptedData.length,
+                })
+                
+                // Verificar que el archivo desencriptado tenga un tamaño razonable
+                if (decryptedData.length === 0) {
+                  throw new Error('Archivo desencriptado está vacío')
+                }
                 
                 // Determinar content-type correcto del archivo desencriptado
-                const finalContentType = contentType.includes('octet-stream') 
-                  ? (decryptMediaType === 'image' ? 'image/jpeg' : decryptMediaType === 'video' ? 'video/mp4' : contentType)
-                  : contentType
+                // Intentar detectar el tipo real del archivo desencriptado
+                let finalContentType = contentType
+                if (contentType.includes('octet-stream')) {
+                  // Verificar magic bytes del archivo desencriptado
+                  if (decryptedData[0] === 0xFF && decryptedData[1] === 0xD8) {
+                    finalContentType = 'image/jpeg' // JPEG
+                  } else if (decryptedData[0] === 0x89 && decryptedData[1] === 0x50) {
+                    finalContentType = 'image/png' // PNG
+                  } else if (decryptMediaType === 'image') {
+                    finalContentType = 'image/jpeg'
+                  } else if (decryptMediaType === 'video') {
+                    finalContentType = 'video/mp4'
+                  }
+                }
+                
+                console.log('[Media Proxy] Content-Type final:', finalContentType)
                 
                 return new NextResponse(decryptedData, {
                   headers: {
@@ -214,7 +243,12 @@ export async function GET(request: NextRequest) {
                   },
                 })
               } catch (decryptError: any) {
-                console.error('[Media Proxy] ❌ Error desencriptando archivo:', decryptError.message)
+                console.error('[Media Proxy] ❌ Error desencriptando archivo:', {
+                  error: decryptError.message,
+                  stack: decryptError.stack,
+                  mediaKeyLength: mediaKey?.length,
+                  encryptedSize: encryptedData.length,
+                })
                 // Si falla la desencriptación, retornar el archivo encriptado
                 // (el navegador mostrará error pero al menos tenemos el archivo)
                 return new NextResponse(encryptedData, {
