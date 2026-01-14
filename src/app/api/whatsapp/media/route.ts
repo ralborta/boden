@@ -238,7 +238,7 @@ export async function GET(request: NextRequest) {
                 
                 console.log('[Media Proxy] Content-Type final:', finalContentType)
                 
-                return new NextResponse(decryptedData, {
+                return new NextResponse(Buffer.from(decryptedData), {
                   headers: {
                     'Content-Type': finalContentType,
                     'Cache-Control': 'public, max-age=3600',
