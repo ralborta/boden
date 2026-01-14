@@ -121,13 +121,16 @@ export async function GET(request: NextRequest) {
       if (finalUrl.includes('mmg.whatsapp.net') || finalUrl.includes('whatsapp.net')) {
         console.log('[Media Proxy] URL de WhatsApp detectada, usando mediaKey para desencriptar')
         
-        // Si tenemos mediaKey, intentar obtener el archivo desencriptado desde BuilderBot
-        if (mediaKey) {
-          // BuilderBot puede tener un endpoint para obtener archivos desencriptados
+        // Si tenemos mediaKey y messageId, intentar obtener el archivo desencriptado desde BuilderBot
+        // BuilderBot puede tener endpoints específicos para obtener media desencriptado
+        if (mediaKey && messageId) {
+          // Intentar endpoints posibles de BuilderBot para obtener media desencriptado
+          // Basado en la estructura de la API: /api/v2/{BOT_ID}/messages/{messageId}/media
           const possibleEndpoints = [
-            `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media/${mediaKey}`,
             `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages/${messageId}/media`,
+            `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media/${mediaKey}`,
             `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/download/${mediaKey}`,
+            `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages/${messageId}/download`,
           ]
           
           for (const endpoint of possibleEndpoints) {
@@ -142,7 +145,7 @@ export async function GET(request: NextRequest) {
               })
 
               const contentType = response.headers['content-type'] || 'image/jpeg'
-              console.log('[Media Proxy] ✅ Archivo desencriptado descargado, tamaño:', response.data.length, 'bytes, tipo:', contentType)
+              console.log('[Media Proxy] ✅ Archivo desencriptado descargado desde BuilderBot, tamaño:', response.data.length, 'bytes, tipo:', contentType)
 
               return new NextResponse(response.data, {
                 headers: {
@@ -151,26 +154,38 @@ export async function GET(request: NextRequest) {
                 },
               })
             } catch (error: any) {
-              console.log('[Media Proxy] Endpoint falló:', endpoint, error.response?.status || error.message)
+              const status = error.response?.status
+              const statusText = error.response?.statusText
+              console.log('[Media Proxy] Endpoint falló:', endpoint, status || statusText || error.message)
+              if (error.response?.data) {
+                console.log('[Media Proxy] Respuesta de error:', JSON.stringify(error.response.data).substring(0, 200))
+              }
             }
           }
+          
+          console.warn('[Media Proxy] ⚠️ Todos los endpoints de BuilderBot fallaron, intentando descargar directamente desde WhatsApp')
         }
         
-        // Si no tenemos mediaKey o los endpoints fallaron, intentar descargar directamente
-        // (aunque probablemente será .enc)
+        // Si no tenemos mediaKey/messageId o los endpoints fallaron, intentar descargar directamente
+        // Esto descargará el archivo encriptado (.enc) que necesitará ser desencriptado
         try {
-          console.log('[Media Proxy] Intentando descargar directamente desde URL de WhatsApp (puede ser .enc)')
+          console.log('[Media Proxy] Descargando directamente desde URL de WhatsApp (será .enc si no se desencripta)')
           const response = await axios.get(finalUrl, {
             responseType: 'arraybuffer',
             timeout: 30000,
             validateStatus: (status) => status < 500,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            },
           })
 
           if (response.status === 200) {
             const contentType = response.headers['content-type'] || 'application/octet-stream'
-            console.log('[Media Proxy] ⚠️ Archivo descargado (puede estar encriptado), tamaño:', response.data.length, 'bytes, tipo:', contentType)
+            console.log('[Media Proxy] ⚠️ Archivo descargado desde WhatsApp (probablemente encriptado), tamaño:', response.data.length, 'bytes, tipo:', contentType)
             
-            // Retornar el archivo (puede ser .enc, el navegador lo manejará)
+            // Verificar si el contenido parece estar encriptado (bytes aleatorios)
+            // Si es así, necesitamos desencriptarlo usando mediaKey
+            // Por ahora retornamos el archivo tal cual
             return new NextResponse(response.data, {
               headers: {
                 'Content-Type': contentType,
