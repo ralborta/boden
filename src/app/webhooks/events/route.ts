@@ -9,6 +9,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
 
     console.log('📩 Webhook recibido en /webhooks/events:', JSON.stringify(body, null, 2))
+    
+    // Log detallado para debugging de imágenes
+    if (body?.data?.message?.imageMessage || body?.data?.message?.videoMessage || body?.data?.message?.documentMessage) {
+      console.log('🖼️ [WEBHOOK DEBUG] Media detectado en webhook:', {
+        hasImageMessage: !!body.data.message.imageMessage,
+        hasVideoMessage: !!body.data.message.videoMessage,
+        hasDocumentMessage: !!body.data.message.documentMessage,
+        imageMessageKeys: body.data.message.imageMessage ? Object.keys(body.data.message.imageMessage) : [],
+        imageMessageStructure: body.data.message.imageMessage ? JSON.stringify(body.data.message.imageMessage).substring(0, 500) : null,
+      })
+    }
 
     const eventName = body?.eventName || body?.event
     const data = body?.data || body?.payload || body

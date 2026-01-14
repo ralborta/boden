@@ -746,7 +746,7 @@ function extractMedia(data: Record<string, any>): {
   // Buscar imagen
   if (data.message?.imageMessage) {
     const img = data.message.imageMessage
-    console.log('[extractMedia] Imagen detectada:', {
+    console.log('[extractMedia] Imagen detectada - ESTRUCTURA COMPLETA:', {
       hasUrl: !!img.url,
       hasDirectPath: !!img.directPath,
       hasMediaUrl: !!img.mediaUrl,
@@ -755,7 +755,15 @@ function extractMedia(data: Record<string, any>): {
       caption: img.caption,
       keys: Object.keys(img),
       urlType: typeof img.url,
+      urlValue: img.url,
       directPathType: typeof img.directPath,
+      directPathValue: img.directPath,
+      mediaUrlType: typeof img.mediaUrl,
+      mediaUrlValue: img.mediaUrl,
+      mediaKeyType: typeof img.mediaKey,
+      mediaKeyValue: img.mediaKey,
+      // Log completo del objeto para debugging
+      fullObject: JSON.stringify(img).substring(0, 1000),
     })
     
     // Priorizar URL directa, luego directPath, luego construir URL desde mediaKey
