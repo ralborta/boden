@@ -90,9 +90,19 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     }
     
     // Si la URL empieza con "builderbot:" o es un mediaKey, usar proxy
+    // BuilderBot envía archivos encriptados que necesitan ser descargados
     if (mediaUrlStr.startsWith('builderbot:') || message.mediaKey) {
-      const key = message.mediaKey || mediaUrlStr.replace('builderbot:', '')
+      let key = message.mediaKey
+      
+      // Si la URL contiene el mediaKey (formato builderbot:mediaKey:...)
+      if (mediaUrlStr.startsWith('builderbot:mediaKey:')) {
+        key = mediaUrlStr.replace('builderbot:mediaKey:', '')
+      } else if (mediaUrlStr.startsWith('builderbot:')) {
+        key = mediaUrlStr.replace('builderbot:', '')
+      }
+      
       if (key) {
+        console.log('[MessageBubble] Usando proxy para descargar archivo encriptado con mediaKey:', key.substring(0, 50))
         return `/api/whatsapp/media?key=${encodeURIComponent(key)}&messageId=${encodeURIComponent(message.id)}&conversationId=${encodeURIComponent(message.conversationId)}`
       }
     }
