@@ -34,29 +34,84 @@ export async function GET(request: NextRequest) {
     let finalUrl = mediaUrl
 
     // Si tenemos mediaKey pero no URL, intentar obtenerla desde BuilderBot API
+    // BuilderBot envía archivos encriptados (.enc) que necesitan ser descargados
     if (mediaKey && !mediaUrl) {
-      // BuilderBot Cloud API v2 endpoint para obtener media
-      const mediaEndpoint = `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media/${mediaKey}`
+      // Intentar múltiples endpoints posibles de BuilderBot para obtener media
+      const possibleEndpoints = [
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media/${mediaKey}`,
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages/${messageId}/media`,
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/download/${mediaKey}`,
+      ]
       
-      try {
-        const response = await axios.get(mediaEndpoint, {
-          headers: {
-            'x-api-builderbot': API_KEY,
-          },
-          responseType: 'arraybuffer',
-          timeout: 30000,
-        })
+      for (const endpoint of possibleEndpoints) {
+        try {
+          console.log('[Media Proxy] Intentando descargar desde:', endpoint)
+          const response = await axios.get(endpoint, {
+            headers: {
+              'x-api-builderbot': API_KEY,
+            },
+            responseType: 'arraybuffer',
+            timeout: 30000,
+          })
 
-        // Retornar la imagen directamente
-        return new NextResponse(response.data, {
-          headers: {
-            'Content-Type': response.headers['content-type'] || 'image/jpeg',
-            'Cache-Control': 'public, max-age=3600',
-          },
-        })
-      } catch (error: any) {
-        console.error('[Media Proxy] Error obteniendo media desde BuilderBot:', error.message)
-        // Continuar con el intento de usar la URL directa si está disponible
+          // Detectar tipo de contenido
+          const contentType = response.headers['content-type'] || 
+                            (response.headers['content-disposition']?.includes('image') ? 'image/jpeg' : 'application/octet-stream')
+          
+          console.log('[Media Proxy] ✅ Archivo descargado exitosamente, tamaño:', response.data.length, 'bytes, tipo:', contentType)
+
+          // Retornar el archivo directamente (puede ser .enc o desencriptado)
+          return new NextResponse(response.data, {
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': 'public, max-age=3600',
+              'Content-Disposition': `inline; filename="media"`,
+            },
+          })
+        } catch (error: any) {
+          console.log('[Media Proxy] Endpoint falló:', endpoint, error.response?.status || error.message)
+          // Continuar con el siguiente endpoint
+        }
+      }
+      
+      console.error('[Media Proxy] ❌ Todos los endpoints fallaron para mediaKey:', mediaKey)
+    }
+    
+    // Si la URL contiene "builderbot:mediaKey:", extraer el mediaKey
+    if (mediaUrl && mediaUrl.startsWith('builderbot:mediaKey:')) {
+      const extractedKey = mediaUrl.replace('builderbot:mediaKey:', '')
+      console.log('[Media Proxy] URL contiene mediaKey, extrayendo:', extractedKey.substring(0, 50))
+      
+      // Intentar descargar usando el mediaKey extraído
+      const possibleEndpoints = [
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media/${extractedKey}`,
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages/${messageId}/media`,
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/download/${extractedKey}`,
+      ]
+      
+      for (const endpoint of possibleEndpoints) {
+        try {
+          console.log('[Media Proxy] Intentando descargar desde URL con mediaKey:', endpoint)
+          const response = await axios.get(endpoint, {
+            headers: {
+              'x-api-builderbot': API_KEY,
+            },
+            responseType: 'arraybuffer',
+            timeout: 30000,
+          })
+
+          const contentType = response.headers['content-type'] || 'application/octet-stream'
+          console.log('[Media Proxy] ✅ Archivo descargado desde URL con mediaKey, tamaño:', response.data.length, 'bytes')
+
+          return new NextResponse(response.data, {
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': 'public, max-age=3600',
+            },
+          })
+        } catch (error: any) {
+          console.log('[Media Proxy] Endpoint falló:', endpoint, error.response?.status || error.message)
+        }
       }
     }
 

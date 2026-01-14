@@ -803,12 +803,25 @@ function extractMedia(data: Record<string, any>): {
     }
     
     // Si solo tenemos mediaKey (no URL), necesitamos construir la URL usando BuilderBot API
+    // BuilderBot envía archivos encriptados (.enc) que necesitan ser descargados usando mediaKey
     if (!mediaUrl && img.mediaKey) {
-      // BuilderBot Cloud API puede proporcionar la URL a través de su API
-      // Por ahora guardamos el mediaKey para procesarlo después
+      // BuilderBot Cloud API puede proporcionar el archivo a través de su API usando mediaKey
+      // Guardamos el mediaKey para descargarlo después
       const mediaKeyStr = typeof img.mediaKey === 'string' ? img.mediaKey : String(img.mediaKey)
-      mediaUrl = `builderbot:${mediaKeyStr}`
-      console.log('[extractMedia] Usando mediaKey para construir URL:', mediaKeyStr.substring(0, 50))
+      // Usar un prefijo especial para indicar que es un mediaKey que necesita descarga
+      mediaUrl = `builderbot:mediaKey:${mediaKeyStr}`
+      console.log('[extractMedia] Archivo encriptado detectado, usando mediaKey:', mediaKeyStr.substring(0, 50))
+    }
+    
+    // También buscar si hay información de archivo encriptado en otros campos
+    if (!mediaUrl) {
+      // Buscar campos que puedan contener información de archivo
+      const fileInfo = (img as any)?.fileSha256 || (img as any)?.fileLength || (img as any)?.fileEncSha256
+      if (fileInfo && img.mediaKey) {
+        const mediaKeyStr = typeof img.mediaKey === 'string' ? img.mediaKey : String(img.mediaKey)
+        mediaUrl = `builderbot:mediaKey:${mediaKeyStr}`
+        console.log('[extractMedia] Archivo detectado por fileInfo, usando mediaKey')
+      }
     }
     
     // Si aún no tenemos URL, loggear advertencia
