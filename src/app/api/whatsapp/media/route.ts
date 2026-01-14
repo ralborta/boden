@@ -193,10 +193,11 @@ export async function GET(request: NextRequest) {
                   mediaKeyPreview: mediaKey.substring(0, 20) + '...',
                   encryptedSize: encryptedData.length,
                   hasMediaType: !!mediaType,
+                  mediaTypeValue: mediaType,
                 })
                 
                 // Usar el mediaType del parámetro o determinar basado en content-type
-                let decryptMediaType: 'image' | 'video' | 'document' | 'audio' | 'sticker' = mediaType || 'image'
+                let decryptMediaType: 'image' | 'video' | 'document' | 'audio' | 'sticker' = (mediaType as 'image' | 'video' | 'document' | 'audio' | 'sticker') || 'image'
                 if (!mediaType) {
                   if (contentType.includes('video')) decryptMediaType = 'video'
                   else if (contentType.includes('audio')) decryptMediaType = 'audio'
