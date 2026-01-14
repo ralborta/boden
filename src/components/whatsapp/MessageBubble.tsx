@@ -22,7 +22,12 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   }
 
   const isAgent = message.from === 'agent'
-  const hasMedia = !!message.mediaUrl
+  
+  // Validar que mediaUrl sea válido (string o objeto con propiedades)
+  const hasMedia = !!message.mediaUrl && (
+    typeof message.mediaUrl === 'string' || 
+    (typeof message.mediaUrl === 'object' && message.mediaUrl !== null)
+  )
   const mediaType = message.mediaType || 'image'
 
   const getMediaIcon = () => {
@@ -39,26 +44,57 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   }
 
   // Construir URL de imagen - usar proxy si es necesario
-  const getImageUrl = () => {
+  const getImageUrl = (): string | null => {
     // Asegurarse de que mediaUrl sea una cadena
     let mediaUrlStr: string | null = null
     
-    if (message.mediaUrl) {
-      // Si es un objeto, intentar extraer la URL
-      if (typeof message.mediaUrl === 'object') {
-        console.warn('[MessageBubble] mediaUrl es un objeto, intentando extraer URL:', message.mediaUrl)
-        mediaUrlStr = (message.mediaUrl as any)?.url || (message.mediaUrl as any)?.mediaUrl || (message.mediaUrl as any)?.directPath || String(message.mediaUrl)
-      } else {
-        mediaUrlStr = String(message.mediaUrl)
-      }
+    if (!message.mediaUrl) {
+      return null
     }
     
-    if (!mediaUrlStr) return null
+    // Si es un objeto, intentar extraer la URL
+    if (typeof message.mediaUrl === 'object' && message.mediaUrl !== null) {
+      console.warn('[MessageBubble] mediaUrl es un objeto, intentando extraer URL:', {
+        keys: Object.keys(message.mediaUrl),
+        hasUrl: !!(message.mediaUrl as any)?.url,
+        hasMediaUrl: !!(message.mediaUrl as any)?.mediaUrl,
+        hasDirectPath: !!(message.mediaUrl as any)?.directPath,
+      })
+      mediaUrlStr = (message.mediaUrl as any)?.url || 
+                    (message.mediaUrl as any)?.mediaUrl || 
+                    (message.mediaUrl as any)?.directPath || 
+                    (message.mediaUrl as any)?.href ||
+                    null
+      
+      // Si aún no tenemos una URL, intentar convertir el objeto a string
+      if (!mediaUrlStr) {
+        try {
+          const stringified = JSON.stringify(message.mediaUrl)
+          console.warn('[MessageBubble] No se pudo extraer URL del objeto, usando string completo:', stringified.substring(0, 100))
+          // No usar el string completo como URL, retornar null
+          return null
+        } catch (err) {
+          console.error('[MessageBubble] Error al convertir mediaUrl objeto a string:', err)
+          return null
+        }
+      }
+    } else if (typeof message.mediaUrl === 'string') {
+      mediaUrlStr = message.mediaUrl
+    } else {
+      // Otro tipo, intentar convertir
+      mediaUrlStr = String(message.mediaUrl)
+    }
+    
+    if (!mediaUrlStr || mediaUrlStr.trim() === '') {
+      return null
+    }
     
     // Si la URL empieza con "builderbot:" o es un mediaKey, usar proxy
     if (mediaUrlStr.startsWith('builderbot:') || message.mediaKey) {
       const key = message.mediaKey || mediaUrlStr.replace('builderbot:', '')
-      return `/api/whatsapp/media?key=${encodeURIComponent(key)}&messageId=${encodeURIComponent(message.id)}&conversationId=${encodeURIComponent(message.conversationId)}`
+      if (key) {
+        return `/api/whatsapp/media?key=${encodeURIComponent(key)}&messageId=${encodeURIComponent(message.id)}&conversationId=${encodeURIComponent(message.conversationId)}`
+      }
     }
     
     // Si la URL no es accesible directamente (no empieza con http), usar proxy
@@ -90,11 +126,30 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
               imageLoading ? 'opacity-0' : 'opacity-100'
             } transition-opacity duration-300`}
             onLoad={() => setImageLoading(false)}
-            onError={() => {
+            onError={(e) => {
+              // Convertir mediaUrl a string para logging seguro
+              let originalUrlStr = 'N/A'
+              try {
+                if (message.mediaUrl) {
+                  if (typeof message.mediaUrl === 'string') {
+                    originalUrlStr = message.mediaUrl
+                  } else if (typeof message.mediaUrl === 'object') {
+                    originalUrlStr = JSON.stringify(message.mediaUrl).substring(0, 200)
+                  } else {
+                    originalUrlStr = String(message.mediaUrl)
+                  }
+                }
+              } catch (err) {
+                originalUrlStr = '[Error serializando mediaUrl]'
+              }
+              
               console.error('[MessageBubble] Error cargando imagen:', {
-                url: imageUrl,
-                originalUrl: message.mediaUrl,
+                imageUrl,
+                originalUrl: originalUrlStr,
                 mediaKey: message.mediaKey,
+                mediaType: message.mediaType,
+                messageId: message.id,
+                error: e,
               })
               setImageError(true)
               setImageLoading(false)
@@ -132,7 +187,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           )}
         </div>
         <a
-          href={message.mediaUrl}
+          href={getImageUrl() || '#'}
           target="_blank"
           rel="noopener noreferrer"
           className={`p-2 rounded-lg transition-colors ${
@@ -141,6 +196,12 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
               : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
           }`}
           download
+          onClick={(e) => {
+            if (!getImageUrl()) {
+              e.preventDefault()
+              console.warn('[MessageBubble] No hay URL válida para descargar')
+            }
+          }}
         >
           <Download className="w-4 h-4" />
         </a>
