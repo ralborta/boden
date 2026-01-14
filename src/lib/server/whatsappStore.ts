@@ -784,18 +784,24 @@ function extractMedia(data: Record<string, any>): {
     for (const field of possibleUrlFields) {
       if (field) {
         if (typeof field === 'string' && field.trim() !== '') {
-          // Si es una URL válida (http/https) o un path, usarla
-          if (field.startsWith('http://') || field.startsWith('https://') || field.startsWith('/') || field.includes('.')) {
+          // Priorizar URLs de WhatsApp (mmg.whatsapp.net) o cualquier URL http/https
+          if (field.startsWith('http://') || field.startsWith('https://')) {
             mediaUrl = field
-            console.log('[extractMedia] URL encontrada en campo:', field.substring(0, 100))
+            console.log('[extractMedia] ✅ URL HTTP/HTTPS encontrada:', field.substring(0, 150))
+            break
+          }
+          // También aceptar paths que parezcan URLs
+          if (field.startsWith('/') || (field.includes('.') && field.length > 10)) {
+            mediaUrl = field
+            console.log('[extractMedia] ✅ Path/URL encontrado:', field.substring(0, 150))
             break
           }
         } else if (typeof field === 'object' && field !== null) {
           // Si el campo es un objeto, intentar extraer URL de él
           const objUrl = (field as any)?.url || (field as any)?.href || (field as any)?.src
-          if (objUrl && typeof objUrl === 'string') {
+          if (objUrl && typeof objUrl === 'string' && (objUrl.startsWith('http://') || objUrl.startsWith('https://'))) {
             mediaUrl = objUrl
-            console.log('[extractMedia] URL extraída de objeto:', objUrl.substring(0, 100))
+            console.log('[extractMedia] ✅ URL extraída de objeto:', objUrl.substring(0, 150))
             break
           }
         }
