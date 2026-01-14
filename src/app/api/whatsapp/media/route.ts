@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   const mediaKey = searchParams.get('key')
   const messageId = searchParams.get('messageId')
   const conversationId = searchParams.get('conversationId')
+  const mediaTypeParam = searchParams.get('mediaType') as 'image' | 'video' | 'document' | 'audio' | 'sticker' | null
 
   if (!mediaUrl && !mediaKey) {
     return NextResponse.json(
