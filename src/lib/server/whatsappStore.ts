@@ -735,24 +735,39 @@ function extractMedia(data: Record<string, any>): {
       mimetype: img.mimetype,
       caption: img.caption,
       keys: Object.keys(img),
+      urlType: typeof img.url,
+      directPathType: typeof img.directPath,
     })
     
     // Priorizar URL directa, luego directPath, luego construir URL desde mediaKey
-    let mediaUrl = img.url || img.directPath || img.mediaUrl
+    // Asegurarse de que siempre sea una cadena
+    let mediaUrl: string | undefined = undefined
+    
+    if (img.url) {
+      mediaUrl = typeof img.url === 'string' ? img.url : String(img.url)
+    } else if (img.directPath) {
+      mediaUrl = typeof img.directPath === 'string' ? img.directPath : String(img.directPath)
+    } else if (img.mediaUrl) {
+      mediaUrl = typeof img.mediaUrl === 'string' ? img.mediaUrl : String(img.mediaUrl)
+    }
     
     // Si solo tenemos mediaKey, necesitamos construir la URL usando BuilderBot API
     if (!mediaUrl && img.mediaKey) {
       // BuilderBot Cloud API puede proporcionar la URL a través de su API
       // Por ahora guardamos el mediaKey para procesarlo después
-      mediaUrl = `builderbot:${img.mediaKey}`
+      const mediaKeyStr = typeof img.mediaKey === 'string' ? img.mediaKey : String(img.mediaKey)
+      mediaUrl = `builderbot:${mediaKeyStr}`
     }
+    
+    // Asegurarse de que caption sea una cadena
+    const captionStr = img.caption ? (typeof img.caption === 'string' ? img.caption : String(img.caption)) : undefined
     
     return {
       mediaUrl,
       mediaType: 'image',
       mediaMimeType: img.mimetype || 'image/jpeg',
-      caption: img.caption,
-      mediaKey: img.mediaKey,
+      caption: captionStr,
+      mediaKey: img.mediaKey ? (typeof img.mediaKey === 'string' ? img.mediaKey : String(img.mediaKey)) : undefined,
     }
   }
 

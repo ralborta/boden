@@ -40,21 +40,34 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   // Construir URL de imagen - usar proxy si es necesario
   const getImageUrl = () => {
-    if (!message.mediaUrl) return null
+    // Asegurarse de que mediaUrl sea una cadena
+    let mediaUrlStr: string | null = null
+    
+    if (message.mediaUrl) {
+      // Si es un objeto, intentar extraer la URL
+      if (typeof message.mediaUrl === 'object') {
+        console.warn('[MessageBubble] mediaUrl es un objeto, intentando extraer URL:', message.mediaUrl)
+        mediaUrlStr = (message.mediaUrl as any)?.url || (message.mediaUrl as any)?.mediaUrl || (message.mediaUrl as any)?.directPath || String(message.mediaUrl)
+      } else {
+        mediaUrlStr = String(message.mediaUrl)
+      }
+    }
+    
+    if (!mediaUrlStr) return null
     
     // Si la URL empieza con "builderbot:" o es un mediaKey, usar proxy
-    if (message.mediaUrl.startsWith('builderbot:') || message.mediaKey) {
-      const key = message.mediaKey || message.mediaUrl.replace('builderbot:', '')
+    if (mediaUrlStr.startsWith('builderbot:') || message.mediaKey) {
+      const key = message.mediaKey || mediaUrlStr.replace('builderbot:', '')
       return `/api/whatsapp/media?key=${encodeURIComponent(key)}&messageId=${encodeURIComponent(message.id)}&conversationId=${encodeURIComponent(message.conversationId)}`
     }
     
     // Si la URL no es accesible directamente (no empieza con http), usar proxy
-    if (!message.mediaUrl.startsWith('http://') && !message.mediaUrl.startsWith('https://')) {
-      return `/api/whatsapp/media?url=${encodeURIComponent(message.mediaUrl)}&messageId=${encodeURIComponent(message.id)}`
+    if (!mediaUrlStr.startsWith('http://') && !mediaUrlStr.startsWith('https://')) {
+      return `/api/whatsapp/media?url=${encodeURIComponent(mediaUrlStr)}&messageId=${encodeURIComponent(message.id)}`
     }
     
     // URL directa, usar tal cual
-    return message.mediaUrl
+    return mediaUrlStr
   }
 
   const renderMedia = () => {
