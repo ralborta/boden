@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import axios from 'axios'
+import { decryptWhatsAppMedia } from '@/lib/whatsapp-decrypt'
 
 /**
  * Endpoint proxy para obtener media desde BuilderBot
@@ -181,17 +182,56 @@ export async function GET(request: NextRequest) {
 
           if (response.status === 200) {
             const contentType = response.headers['content-type'] || 'application/octet-stream'
-            console.log('[Media Proxy] ⚠️ Archivo descargado desde WhatsApp (probablemente encriptado), tamaño:', response.data.length, 'bytes, tipo:', contentType)
+            const encryptedData = Buffer.from(response.data)
+            console.log('[Media Proxy] Archivo descargado desde WhatsApp, tamaño:', encryptedData.length, 'bytes')
             
-            // Verificar si el contenido parece estar encriptado (bytes aleatorios)
-            // Si es así, necesitamos desencriptarlo usando mediaKey
-            // Por ahora retornamos el archivo tal cual
-            return new NextResponse(response.data, {
-              headers: {
-                'Content-Type': contentType,
-                'Cache-Control': 'public, max-age=3600',
-              },
-            })
+            // Si tenemos mediaKey, intentar desencriptar
+            if (mediaKey) {
+              try {
+                console.log('[Media Proxy] Intentando desencriptar archivo usando mediaKey...')
+                
+                // Determinar tipo de media basado en content-type o URL
+                let mediaType: 'image' | 'video' | 'document' | 'audio' | 'sticker' = 'image'
+                if (contentType.includes('video')) mediaType = 'video'
+                else if (contentType.includes('audio')) mediaType = 'audio'
+                else if (contentType.includes('pdf') || contentType.includes('document')) mediaType = 'document'
+                else if (contentType.includes('webp') && finalUrl.includes('sticker')) mediaType = 'sticker'
+                
+                const decryptedData = decryptWhatsAppMedia(encryptedData, mediaKey, decryptMediaType)
+                console.log('[Media Proxy] ✅ Archivo desencriptado exitosamente, tamaño original:', encryptedData.length, 'bytes, tamaño desencriptado:', decryptedData.length, 'bytes')
+                
+                // Determinar content-type correcto del archivo desencriptado
+                const finalContentType = contentType.includes('octet-stream') 
+                  ? (mediaType === 'image' ? 'image/jpeg' : mediaType === 'video' ? 'video/mp4' : contentType)
+                  : contentType
+                
+                return new NextResponse(decryptedData, {
+                  headers: {
+                    'Content-Type': finalContentType,
+                    'Cache-Control': 'public, max-age=3600',
+                  },
+                })
+              } catch (decryptError: any) {
+                console.error('[Media Proxy] ❌ Error desencriptando archivo:', decryptError.message)
+                // Si falla la desencriptación, retornar el archivo encriptado
+                // (el navegador mostrará error pero al menos tenemos el archivo)
+                return new NextResponse(encryptedData, {
+                  headers: {
+                    'Content-Type': contentType,
+                    'Cache-Control': 'public, max-age=3600',
+                  },
+                })
+              }
+            } else {
+              // No tenemos mediaKey, retornar archivo encriptado
+              console.warn('[Media Proxy] ⚠️ No hay mediaKey, retornando archivo encriptado')
+              return new NextResponse(encryptedData, {
+                headers: {
+                  'Content-Type': contentType,
+                  'Cache-Control': 'public, max-age=3600',
+                },
+              })
+            }
           }
         } catch (error: any) {
           console.error('[Media Proxy] Error descargando desde URL de WhatsApp:', error.message)
