@@ -611,11 +611,30 @@ async function getRedisMessages(conversationId: string): Promise<WhatsAppMessage
     const raw = await redis.lrange(messagesKey, 0, -1)
     console.log('[getRedisMessages] Valores encontrados en Redis:', raw?.length || 0)
     
-    const messages = raw.map((value: string | unknown) => 
-      typeof value === 'string' 
-        ? (JSON.parse(value) as WhatsAppMessage)
-        : (value as WhatsAppMessage)
-    )
+    const messages = raw.map((value: string | unknown) => {
+      let msg: WhatsAppMessage
+      if (typeof value === 'string') {
+        msg = JSON.parse(value) as WhatsAppMessage
+      } else {
+        msg = value as WhatsAppMessage
+      }
+      
+      // Asegurarse de que mediaUrl sea siempre una cadena
+      if (msg.mediaUrl && typeof msg.mediaUrl !== 'string') {
+        console.warn('[getRedisMessages] mediaUrl no es string, convirtiendo:', {
+          original: msg.mediaUrl,
+          type: typeof msg.mediaUrl,
+          messageId: msg.id,
+        })
+        if (typeof msg.mediaUrl === 'object') {
+          msg.mediaUrl = (msg.mediaUrl as any)?.url || (msg.mediaUrl as any)?.mediaUrl || (msg.mediaUrl as any)?.directPath || String(msg.mediaUrl)
+        } else {
+          msg.mediaUrl = String(msg.mediaUrl)
+        }
+      }
+      
+      return msg
+    })
     
     // Eliminar duplicados por ID
     const uniqueMessages = new Map<string, WhatsAppMessage>()
