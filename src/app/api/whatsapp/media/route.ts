@@ -190,12 +190,14 @@ export async function GET(request: NextRequest) {
               try {
                 console.log('[Media Proxy] Intentando desencriptar archivo usando mediaKey...')
                 
-                // Determinar tipo de media basado en content-type o URL
-                let mediaType: 'image' | 'video' | 'document' | 'audio' | 'sticker' = 'image'
-                if (contentType.includes('video')) mediaType = 'video'
-                else if (contentType.includes('audio')) mediaType = 'audio'
-                else if (contentType.includes('pdf') || contentType.includes('document')) mediaType = 'document'
-                else if (contentType.includes('webp') && finalUrl.includes('sticker')) mediaType = 'sticker'
+                // Usar el mediaType del parámetro o determinar basado en content-type
+                let decryptMediaType: 'image' | 'video' | 'document' | 'audio' | 'sticker' = mediaType || 'image'
+                if (!mediaType) {
+                  if (contentType.includes('video')) decryptMediaType = 'video'
+                  else if (contentType.includes('audio')) decryptMediaType = 'audio'
+                  else if (contentType.includes('pdf') || contentType.includes('document')) decryptMediaType = 'document'
+                  else if (contentType.includes('webp') && finalUrl.includes('sticker')) decryptMediaType = 'sticker'
+                }
                 
                 const decryptedData = decryptWhatsAppMedia(encryptedData, mediaKey, decryptMediaType)
                 console.log('[Media Proxy] ✅ Archivo desencriptado exitosamente, tamaño original:', encryptedData.length, 'bytes, tamaño desencriptado:', decryptedData.length, 'bytes')
