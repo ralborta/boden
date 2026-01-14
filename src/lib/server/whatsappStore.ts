@@ -18,6 +18,10 @@ export type RecordMessageInput = {
   contactName?: string
   contactPhone?: string
   status?: WhatsAppConversationStatus
+  mediaUrl?: string
+  mediaType?: 'image' | 'video' | 'document' | 'audio' | 'sticker'
+  mediaMimeType?: string
+  caption?: string
 }
 
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL
@@ -241,7 +245,7 @@ async function ensureSeeded() {
   
   // Solo en desarrollo local sin Redis
   if (!isProduction) {
-    ensureMemorySeeded()
+  ensureMemorySeeded()
   }
 }
 
@@ -308,6 +312,10 @@ async function storeMessageRedis({
   contactName,
   contactPhone,
   status,
+  mediaUrl,
+  mediaType,
+  mediaMimeType,
+  caption,
 }: RecordMessageInput): Promise<WhatsAppMessage | null> {
   if (!redis) return null
 
@@ -328,6 +336,13 @@ async function storeMessageRedis({
 
   const fallbackPhone = contactPhone || normalizePhone(conversationId)
 
+  // Preparar preview con emoji si hay media
+  let previewText = cleanText
+  if (mediaType) {
+    const mediaEmoji = mediaType === 'image' ? '📷' : mediaType === 'video' ? '🎥' : mediaType === 'document' ? '📄' : mediaType === 'audio' ? '🎵' : '📎'
+    previewText = cleanText ? `${mediaEmoji} ${cleanText}` : `${mediaEmoji} ${mediaType === 'image' ? 'Imagen' : mediaType === 'video' ? 'Video' : mediaType === 'document' ? 'Documento' : mediaType === 'audio' ? 'Audio' : 'Archivo'}`
+  }
+
   const conversation: WhatsAppConversation = parsedConversation
     ? {
         ...parsedConversation,
@@ -339,7 +354,7 @@ async function storeMessageRedis({
         id: normalizedConversationId,
         contactName: contactName || fallbackPhone,
         contactPhone: fallbackPhone,
-        lastMessagePreview: cleanText,
+        lastMessagePreview: previewText,
         lastMessageAt: timestamp,
         unreadCount: from === 'customer' ? 1 : 0,
         status: status || 'open',
@@ -354,9 +369,19 @@ async function storeMessageRedis({
     sentAt: timestamp,
     delivered,
     read: typeof read === 'boolean' ? read : from === 'agent',
+    ...(mediaUrl && { mediaUrl }),
+    ...(mediaType && { mediaType }),
+    ...(mediaMimeType && { mediaMimeType }),
+    ...(caption && { caption }),
   }
 
-  conversation.lastMessagePreview = cleanText
+  // Actualizar preview: si hay media, mostrar emoji + texto o solo emoji
+  if (mediaType) {
+    const mediaEmoji = mediaType === 'image' ? '📷' : mediaType === 'video' ? '🎥' : mediaType === 'document' ? '📄' : mediaType === 'audio' ? '🎵' : '📎'
+    conversation.lastMessagePreview = cleanText ? `${mediaEmoji} ${cleanText}` : `${mediaEmoji} ${mediaType === 'image' ? 'Imagen' : mediaType === 'video' ? 'Video' : mediaType === 'document' ? 'Documento' : mediaType === 'audio' ? 'Audio' : 'Archivo'}`
+  } else {
+    conversation.lastMessagePreview = cleanText
+  }
   conversation.lastMessageAt = timestamp
   conversation.unreadCount =
     from === 'customer'
@@ -403,6 +428,10 @@ function storeMessageMemory({
   contactName,
   contactPhone,
   status,
+  mediaUrl,
+  mediaType,
+  mediaMimeType,
+  caption,
 }: RecordMessageInput): WhatsAppMessage | null {
   const cleanText = text?.trim()
   if (!cleanText) return null
@@ -410,6 +439,13 @@ function storeMessageMemory({
   // Normalizar conversationId para que sea consistente
   const normalizedConversationId = normalizePhone(conversationId)
   const timestamp = toIsoString(sentAt)
+
+  // Preparar preview con emoji si hay media
+  let previewText = cleanText
+  if (mediaType) {
+    const mediaEmoji = mediaType === 'image' ? '📷' : mediaType === 'video' ? '🎥' : mediaType === 'document' ? '📄' : mediaType === 'audio' ? '🎵' : '📎'
+    previewText = cleanText ? `${mediaEmoji} ${cleanText}` : `${mediaEmoji} ${mediaType === 'image' ? 'Imagen' : mediaType === 'video' ? 'Video' : mediaType === 'document' ? 'Documento' : mediaType === 'audio' ? 'Audio' : 'Archivo'}`
+  }
 
   let conversation = memoryConversations.get(normalizedConversationId)
 
@@ -419,7 +455,7 @@ function storeMessageMemory({
       id: normalizedConversationId,
       contactName: contactName || fallbackPhone,
       contactPhone: fallbackPhone,
-      lastMessagePreview: cleanText,
+      lastMessagePreview: previewText,
       lastMessageAt: timestamp,
       unreadCount: from === 'customer' ? 1 : 0,
       status: status || 'open',
@@ -440,10 +476,20 @@ function storeMessageMemory({
     sentAt: timestamp,
     delivered,
     read: typeof read === 'boolean' ? read : from === 'agent',
+    ...(mediaUrl && { mediaUrl }),
+    ...(mediaType && { mediaType }),
+    ...(mediaMimeType && { mediaMimeType }),
+    ...(caption && { caption }),
   }
 
   conversation.messages = [...conversation.messages, message]
-  conversation.lastMessagePreview = cleanText
+  // Actualizar preview: si hay media, mostrar emoji + texto o solo emoji
+  if (mediaType) {
+    const mediaEmoji = mediaType === 'image' ? '📷' : mediaType === 'video' ? '🎥' : mediaType === 'document' ? '📄' : mediaType === 'audio' ? '🎵' : '📎'
+    conversation.lastMessagePreview = cleanText ? `${mediaEmoji} ${cleanText}` : `${mediaEmoji} ${mediaType === 'image' ? 'Imagen' : mediaType === 'video' ? 'Video' : mediaType === 'document' ? 'Documento' : mediaType === 'audio' ? 'Audio' : 'Archivo'}`
+  } else {
+    conversation.lastMessagePreview = cleanText
+  }
   conversation.lastMessageAt = timestamp
   conversation.unreadCount = from === 'customer' ? conversation.unreadCount + 1 : 0
 
@@ -472,7 +518,7 @@ export async function getConversations(): Promise<WhatsAppConversation[]> {
   if (conversationsList.length > 0) {
     console.log('[getConversations] IDs de conversaciones:', conversationsList.map(c => c.id))
   }
-  
+
   return conversationsList.sort(
     (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
   )
@@ -650,14 +696,107 @@ type BuilderbotEvent = {
 }
 
 function extractText(data: Record<string, any>): string | undefined {
-  return (
+  // Primero buscar captions de imágenes/videos
+  const imageCaption = 
+    data.message?.imageMessage?.caption ||
+    data.message?.videoMessage?.caption ||
+    data.message?.documentMessage?.caption ||
+    data.caption
+  
+  // Luego buscar texto normal
+  const text = 
     data.message?.extendedTextMessage?.text ||
     data.message?.conversation ||
     data.answer ||
     data.body ||
     data.text ||
-    data.message?.extendedTextMessage?.caption
-  )
+    data.message?.extendedTextMessage?.caption ||
+    imageCaption
+
+  return text
+}
+
+function extractMedia(data: Record<string, any>): {
+  mediaUrl?: string
+  mediaType?: 'image' | 'video' | 'document' | 'audio' | 'sticker'
+  mediaMimeType?: string
+  caption?: string
+} | null {
+  // Buscar imagen
+  if (data.message?.imageMessage) {
+    const img = data.message.imageMessage
+    return {
+      mediaUrl: img.url || img.directPath || img.mediaUrl || img.mediaKey,
+      mediaType: 'image',
+      mediaMimeType: img.mimetype || 'image/jpeg',
+      caption: img.caption,
+    }
+  }
+
+  // Buscar video
+  if (data.message?.videoMessage) {
+    const vid = data.message.videoMessage
+    return {
+      mediaUrl: vid.url || vid.directPath || vid.mediaUrl || vid.mediaKey,
+      mediaType: 'video',
+      mediaMimeType: vid.mimetype || 'video/mp4',
+      caption: vid.caption,
+    }
+  }
+
+  // Buscar documento
+  if (data.message?.documentMessage) {
+    const doc = data.message.documentMessage
+    return {
+      mediaUrl: doc.url || doc.directPath || doc.mediaUrl || doc.mediaKey,
+      mediaType: 'document',
+      mediaMimeType: doc.mimetype || 'application/pdf',
+      caption: doc.caption || doc.fileName,
+    }
+  }
+
+  // Buscar audio
+  if (data.message?.audioMessage) {
+    const aud = data.message.audioMessage
+    return {
+      mediaUrl: aud.url || aud.directPath || aud.mediaUrl || aud.mediaKey,
+      mediaType: 'audio',
+      mediaMimeType: aud.mimetype || 'audio/ogg',
+    }
+  }
+
+  // Buscar sticker
+  if (data.message?.stickerMessage) {
+    const stk = data.message.stickerMessage
+    return {
+      mediaUrl: stk.url || stk.directPath || stk.mediaUrl || stk.mediaKey,
+      mediaType: 'sticker',
+      mediaMimeType: stk.mimetype || 'image/webp',
+    }
+  }
+
+  // Buscar en campos directos (formato BuilderBot Cloud API)
+  if (data.mediaUrl || data.media_url) {
+    const mimeType = data.mimeType || data.mimetype || data.mediaType
+    let mediaType: 'image' | 'video' | 'document' | 'audio' | 'sticker' = 'image'
+    
+    if (mimeType) {
+      if (mimeType.startsWith('image/')) mediaType = 'image'
+      else if (mimeType.startsWith('video/')) mediaType = 'video'
+      else if (mimeType.startsWith('audio/')) mediaType = 'audio'
+      else if (mimeType.includes('pdf') || mimeType.includes('document')) mediaType = 'document'
+      else if (mimeType.includes('sticker') || mimeType.includes('webp')) mediaType = 'sticker'
+    }
+
+    return {
+      mediaUrl: data.mediaUrl || data.media_url,
+      mediaType,
+      mediaMimeType: mimeType,
+      caption: data.caption || data.text,
+    }
+  }
+
+  return null
 }
 
 function extractConversationId(data: Record<string, any>): string | null {
@@ -702,20 +841,26 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
 
   const text = extractText(data)
   const conversationId = extractConversationId(data)
+  const media = extractMedia(data)
 
   console.log('[ingestBuilderbotEvent] extracción:', {
     text: text || 'NO ENCONTRADO',
     conversationId: conversationId || 'NO ENCONTRADO',
+    hasMedia: !!media,
+    mediaType: media?.mediaType,
+    mediaUrl: media?.mediaUrl ? 'PRESENTE' : 'NO',
     dataKeys: Object.keys(data),
     hasBody: !!data.body,
     hasFrom: !!data.from,
     hasConversationId: !!data.conversationId,
   })
 
-  if (!text || !conversationId) {
-    console.warn('❌ Builderbot webhook sin texto o conversationId', { 
+  // Permitir mensajes con solo media (sin texto) o con texto
+  if ((!text && !media) || !conversationId) {
+    console.warn('❌ Builderbot webhook sin texto/media o conversationId', { 
       eventName, 
       text: text || 'FALTA TEXTO',
+      hasMedia: !!media,
       conversationId: conversationId || 'FALTA CONVERSATION_ID',
       dataKeys: Object.keys(data),
       dataSample: JSON.stringify(data).substring(0, 200)
@@ -733,10 +878,15 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
     ? toIsoString(Number(data.messageTimestamp) * 1000)
     : Date.now()
 
+  // Si hay media pero no texto, usar el caption o un texto por defecto
+  const messageText = text || media?.caption || (media ? `📎 ${media.mediaType === 'image' ? 'Imagen' : media.mediaType === 'video' ? 'Video' : media.mediaType === 'document' ? 'Documento' : media.mediaType === 'audio' ? 'Audio' : 'Archivo'}` : '')
+
   console.log('[ingestBuilderbotEvent] almacenando mensaje', {
     conversationId,
     from,
-    text,
+    text: messageText,
+    hasMedia: !!media,
+    mediaType: media?.mediaType,
     name,
     phone,
     normalizedPhone: normalizePhone(conversationId),
@@ -746,13 +896,17 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
   const storedMessage = await storeMessage({
     conversationId,
     from,
-    text,
+    text: messageText,
     sentAt: timestamp,
     delivered: true,
     read: from === 'agent',
     id: data.key?.id,
     contactName: name,
     contactPhone: phone,
+    mediaUrl: media?.mediaUrl,
+    mediaType: media?.mediaType,
+    mediaMimeType: media?.mediaMimeType,
+    caption: media?.caption,
   })
 
   if (storedMessage) {

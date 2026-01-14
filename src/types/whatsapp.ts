@@ -19,5 +19,9 @@ export type WhatsAppMessage = {
   sentAt: string // ISO string
   delivered?: boolean
   read?: boolean
+  mediaUrl?: string // URL de la imagen/video/documento
+  mediaType?: 'image' | 'video' | 'document' | 'audio' | 'sticker'
+  mediaMimeType?: string // ej: 'image/jpeg', 'video/mp4'
+  caption?: string // Texto que acompaña a la imagen
 }
 
