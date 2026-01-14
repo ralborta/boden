@@ -786,8 +786,18 @@ function extractMedia(data: Record<string, any>): {
         if (typeof field === 'string' && field.trim() !== '') {
           // Priorizar URLs de WhatsApp (mmg.whatsapp.net) o cualquier URL http/https
           if (field.startsWith('http://') || field.startsWith('https://')) {
-            mediaUrl = field
-            console.log('[extractMedia] ✅ URL HTTP/HTTPS encontrada:', field.substring(0, 150))
+            // Si es una URL de WhatsApp, necesitamos el mediaKey para desencriptar
+            // Guardamos la URL pero también necesitamos el mediaKey
+            if (field.includes('mmg.whatsapp.net') || field.includes('whatsapp.net')) {
+              // URLs de WhatsApp requieren mediaKey para desencriptar
+              // Guardamos la URL pero marcamos que necesita mediaKey
+              mediaUrl = field
+              console.log('[extractMedia] ✅ URL de WhatsApp encontrada (requiere mediaKey para desencriptar):', field.substring(0, 150))
+            } else {
+              // URL normal, usar directamente
+              mediaUrl = field
+              console.log('[extractMedia] ✅ URL HTTP/HTTPS encontrada:', field.substring(0, 150))
+            }
             break
           }
           // También aceptar paths que parezcan URLs

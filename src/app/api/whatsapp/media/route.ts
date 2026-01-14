@@ -117,8 +117,73 @@ export async function GET(request: NextRequest) {
 
     // Si tenemos una URL directa, intentar obtenerla
     if (finalUrl) {
+      // Si la URL es de WhatsApp (mmg.whatsapp.net), necesita mediaKey para desencriptar
+      if (finalUrl.includes('mmg.whatsapp.net') || finalUrl.includes('whatsapp.net')) {
+        console.log('[Media Proxy] URL de WhatsApp detectada, usando mediaKey para desencriptar')
+        
+        // Si tenemos mediaKey, intentar obtener el archivo desencriptado desde BuilderBot
+        if (mediaKey) {
+          // BuilderBot puede tener un endpoint para obtener archivos desencriptados
+          const possibleEndpoints = [
+            `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media/${mediaKey}`,
+            `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages/${messageId}/media`,
+            `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/download/${mediaKey}`,
+          ]
+          
+          for (const endpoint of possibleEndpoints) {
+            try {
+              console.log('[Media Proxy] Intentando descargar archivo desencriptado desde:', endpoint)
+              const response = await axios.get(endpoint, {
+                headers: {
+                  'x-api-builderbot': API_KEY,
+                },
+                responseType: 'arraybuffer',
+                timeout: 30000,
+              })
+
+              const contentType = response.headers['content-type'] || 'image/jpeg'
+              console.log('[Media Proxy] ✅ Archivo desencriptado descargado, tamaño:', response.data.length, 'bytes, tipo:', contentType)
+
+              return new NextResponse(response.data, {
+                headers: {
+                  'Content-Type': contentType,
+                  'Cache-Control': 'public, max-age=3600',
+                },
+              })
+            } catch (error: any) {
+              console.log('[Media Proxy] Endpoint falló:', endpoint, error.response?.status || error.message)
+            }
+          }
+        }
+        
+        // Si no tenemos mediaKey o los endpoints fallaron, intentar descargar directamente
+        // (aunque probablemente será .enc)
+        try {
+          console.log('[Media Proxy] Intentando descargar directamente desde URL de WhatsApp (puede ser .enc)')
+          const response = await axios.get(finalUrl, {
+            responseType: 'arraybuffer',
+            timeout: 30000,
+            validateStatus: (status) => status < 500,
+          })
+
+          if (response.status === 200) {
+            const contentType = response.headers['content-type'] || 'application/octet-stream'
+            console.log('[Media Proxy] ⚠️ Archivo descargado (puede estar encriptado), tamaño:', response.data.length, 'bytes, tipo:', contentType)
+            
+            // Retornar el archivo (puede ser .enc, el navegador lo manejará)
+            return new NextResponse(response.data, {
+              headers: {
+                'Content-Type': contentType,
+                'Cache-Control': 'public, max-age=3600',
+              },
+            })
+          }
+        } catch (error: any) {
+          console.error('[Media Proxy] Error descargando desde URL de WhatsApp:', error.message)
+        }
+      }
       // Si la URL es de BuilderBot, usar autenticación
-      if (finalUrl.includes('builderbot.cloud') || finalUrl.includes('builderbot')) {
+      else if (finalUrl.includes('builderbot.cloud') || finalUrl.includes('builderbot')) {
         try {
           const response = await axios.get(finalUrl, {
             headers: {

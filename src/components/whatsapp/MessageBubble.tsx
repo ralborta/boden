@@ -107,12 +107,18 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       }
     }
     
+    // Si la URL es de WhatsApp (mmg.whatsapp.net), usar proxy con mediaKey para desencriptar
+    if (mediaUrlStr.includes('mmg.whatsapp.net') || mediaUrlStr.includes('whatsapp.net')) {
+      const key = message.mediaKey || ''
+      return `/api/whatsapp/media?url=${encodeURIComponent(mediaUrlStr)}&key=${encodeURIComponent(key)}&messageId=${encodeURIComponent(message.id)}&conversationId=${encodeURIComponent(message.conversationId)}`
+    }
+    
     // Si la URL no es accesible directamente (no empieza con http), usar proxy
     if (!mediaUrlStr.startsWith('http://') && !mediaUrlStr.startsWith('https://')) {
       return `/api/whatsapp/media?url=${encodeURIComponent(mediaUrlStr)}&messageId=${encodeURIComponent(message.id)}`
     }
     
-    // URL directa, usar tal cual
+    // URL directa de otros servicios, usar tal cual
     return mediaUrlStr
   }
 
