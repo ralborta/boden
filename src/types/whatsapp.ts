@@ -23,5 +23,6 @@ export type WhatsAppMessage = {
   mediaType?: 'image' | 'video' | 'document' | 'audio' | 'sticker'
   mediaMimeType?: string // ej: 'image/jpeg', 'video/mp4'
   caption?: string // Texto que acompaña a la imagen
+  mediaKey?: string // Clave de media para descargar desde WhatsApp API
 }
 

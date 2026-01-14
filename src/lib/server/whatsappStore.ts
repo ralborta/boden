@@ -380,7 +380,7 @@ async function storeMessageRedis({
     const mediaEmoji = mediaType === 'image' ? '📷' : mediaType === 'video' ? '🎥' : mediaType === 'document' ? '📄' : mediaType === 'audio' ? '🎵' : '📎'
     conversation.lastMessagePreview = cleanText ? `${mediaEmoji} ${cleanText}` : `${mediaEmoji} ${mediaType === 'image' ? 'Imagen' : mediaType === 'video' ? 'Video' : mediaType === 'document' ? 'Documento' : mediaType === 'audio' ? 'Audio' : 'Archivo'}`
   } else {
-    conversation.lastMessagePreview = cleanText
+  conversation.lastMessagePreview = cleanText
   }
   conversation.lastMessageAt = timestamp
   conversation.unreadCount =
@@ -488,7 +488,7 @@ function storeMessageMemory({
     const mediaEmoji = mediaType === 'image' ? '📷' : mediaType === 'video' ? '🎥' : mediaType === 'document' ? '📄' : mediaType === 'audio' ? '🎵' : '📎'
     conversation.lastMessagePreview = cleanText ? `${mediaEmoji} ${cleanText}` : `${mediaEmoji} ${mediaType === 'image' ? 'Imagen' : mediaType === 'video' ? 'Video' : mediaType === 'document' ? 'Documento' : mediaType === 'audio' ? 'Audio' : 'Archivo'}`
   } else {
-    conversation.lastMessagePreview = cleanText
+  conversation.lastMessagePreview = cleanText
   }
   conversation.lastMessageAt = timestamp
   conversation.unreadCount = from === 'customer' ? conversation.unreadCount + 1 : 0
@@ -721,15 +721,37 @@ function extractMedia(data: Record<string, any>): {
   mediaType?: 'image' | 'video' | 'document' | 'audio' | 'sticker'
   mediaMimeType?: string
   caption?: string
+  mediaKey?: string
 } | null {
   // Buscar imagen
   if (data.message?.imageMessage) {
     const img = data.message.imageMessage
+    console.log('[extractMedia] Imagen detectada:', {
+      hasUrl: !!img.url,
+      hasDirectPath: !!img.directPath,
+      hasMediaUrl: !!img.mediaUrl,
+      hasMediaKey: !!img.mediaKey,
+      mimetype: img.mimetype,
+      caption: img.caption,
+      keys: Object.keys(img),
+    })
+    
+    // Priorizar URL directa, luego directPath, luego construir URL desde mediaKey
+    let mediaUrl = img.url || img.directPath || img.mediaUrl
+    
+    // Si solo tenemos mediaKey, necesitamos construir la URL usando BuilderBot API
+    if (!mediaUrl && img.mediaKey) {
+      // BuilderBot Cloud API puede proporcionar la URL a través de su API
+      // Por ahora guardamos el mediaKey para procesarlo después
+      mediaUrl = `builderbot:${img.mediaKey}`
+    }
+    
     return {
-      mediaUrl: img.url || img.directPath || img.mediaUrl || img.mediaKey,
+      mediaUrl,
       mediaType: 'image',
       mediaMimeType: img.mimetype || 'image/jpeg',
       caption: img.caption,
+      mediaKey: img.mediaKey,
     }
   }
 
@@ -776,7 +798,7 @@ function extractMedia(data: Record<string, any>): {
   }
 
   // Buscar en campos directos (formato BuilderBot Cloud API)
-  if (data.mediaUrl || data.media_url) {
+  if (data.mediaUrl || data.media_url || data.media) {
     const mimeType = data.mimeType || data.mimetype || data.mediaType
     let mediaType: 'image' | 'video' | 'document' | 'audio' | 'sticker' = 'image'
     
@@ -788,13 +810,31 @@ function extractMedia(data: Record<string, any>): {
       else if (mimeType.includes('sticker') || mimeType.includes('webp')) mediaType = 'sticker'
     }
 
+    const mediaUrl = data.mediaUrl || data.media_url || data.media?.url || data.media
+    
+    console.log('[extractMedia] Media directo detectado:', {
+      mediaUrl: mediaUrl ? 'PRESENTE' : 'NO',
+      mediaType,
+      mimeType,
+      hasCaption: !!data.caption,
+      keys: Object.keys(data),
+    })
+
     return {
-      mediaUrl: data.mediaUrl || data.media_url,
+      mediaUrl,
       mediaType,
       mediaMimeType: mimeType,
       caption: data.caption || data.text,
     }
   }
+  
+  // Log detallado para debugging
+  console.log('[extractMedia] No se encontró media, revisando estructura completa:', {
+    hasMessage: !!data.message,
+    messageKeys: data.message ? Object.keys(data.message) : [],
+    topLevelKeys: Object.keys(data),
+    sample: JSON.stringify(data).substring(0, 500),
+  })
 
   return null
 }
@@ -907,6 +947,7 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
     mediaType: media?.mediaType,
     mediaMimeType: media?.mediaMimeType,
     caption: media?.caption,
+    mediaKey: media?.mediaKey,
   })
 
   if (storedMessage) {

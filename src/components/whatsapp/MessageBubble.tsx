@@ -38,25 +38,51 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     }
   }
 
+  // Construir URL de imagen - usar proxy si es necesario
+  const getImageUrl = () => {
+    if (!message.mediaUrl) return null
+    
+    // Si la URL empieza con "builderbot:" o es un mediaKey, usar proxy
+    if (message.mediaUrl.startsWith('builderbot:') || message.mediaKey) {
+      const key = message.mediaKey || message.mediaUrl.replace('builderbot:', '')
+      return `/api/whatsapp/media?key=${encodeURIComponent(key)}&messageId=${encodeURIComponent(message.id)}&conversationId=${encodeURIComponent(message.conversationId)}`
+    }
+    
+    // Si la URL no es accesible directamente (no empieza con http), usar proxy
+    if (!message.mediaUrl.startsWith('http://') && !message.mediaUrl.startsWith('https://')) {
+      return `/api/whatsapp/media?url=${encodeURIComponent(message.mediaUrl)}&messageId=${encodeURIComponent(message.id)}`
+    }
+    
+    // URL directa, usar tal cual
+    return message.mediaUrl
+  }
+
   const renderMedia = () => {
     if (!hasMedia) return null
 
-    if (mediaType === 'image' && !imageError) {
+    const imageUrl = getImageUrl()
+
+    if (mediaType === 'image' && !imageError && imageUrl) {
       return (
-        <div className="mb-2 rounded-xl overflow-hidden">
+        <div className="mb-2 rounded-xl overflow-hidden relative">
           {imageLoading && (
-            <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
+            <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center z-10">
               <ImageIcon className="w-8 h-8 text-gray-400" />
             </div>
           )}
           <img
-            src={message.mediaUrl}
+            src={imageUrl}
             alt={message.caption || 'Imagen'}
-            className={`w-full max-w-md h-auto object-cover ${
+            className={`w-full max-w-md h-auto object-cover rounded-xl ${
               imageLoading ? 'opacity-0' : 'opacity-100'
             } transition-opacity duration-300`}
             onLoad={() => setImageLoading(false)}
             onError={() => {
+              console.error('[MessageBubble] Error cargando imagen:', {
+                url: imageUrl,
+                originalUrl: message.mediaUrl,
+                mediaKey: message.mediaKey,
+              })
               setImageError(true)
               setImageLoading(false)
             }}
