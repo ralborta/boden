@@ -838,6 +838,16 @@ function extractMedia(data: Record<string, any>): {
     // Asegurarse de que caption sea una cadena
     const captionStr = img.caption ? (typeof img.caption === 'string' ? img.caption : String(img.caption)) : undefined
     
+    // Log final de lo que se está retornando
+    console.log('[extractMedia] ✅ RESULTADO FINAL para imagen:', {
+      mediaUrl: mediaUrl ? mediaUrl.substring(0, 150) : 'NO ENCONTRADA',
+      mediaType: 'image',
+      mimetype: img.mimetype || 'image/jpeg',
+      hasCaption: !!captionStr,
+      hasMediaKey: !!img.mediaKey,
+      mediaKeyLength: img.mediaKey ? (typeof img.mediaKey === 'string' ? img.mediaKey.length : String(img.mediaKey).length) : 0,
+    })
+    
     return {
       mediaUrl,
       mediaType: 'image',
