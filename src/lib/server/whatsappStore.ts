@@ -770,20 +770,50 @@ function extractMedia(data: Record<string, any>): {
     // Asegurarse de que siempre sea una cadena
     let mediaUrl: string | undefined = undefined
     
-    if (img.url) {
-      mediaUrl = typeof img.url === 'string' ? img.url : String(img.url)
-    } else if (img.directPath) {
-      mediaUrl = typeof img.directPath === 'string' ? img.directPath : String(img.directPath)
-    } else if (img.mediaUrl) {
-      mediaUrl = typeof img.mediaUrl === 'string' ? img.mediaUrl : String(img.mediaUrl)
+    // Intentar extraer URL de diferentes campos posibles
+    const possibleUrlFields = [
+      img.url,
+      img.directPath,
+      img.mediaUrl,
+      img.mediaKey, // A veces mediaKey puede ser una URL
+      (img as any)?.jpegThumbnail, // Thumbnail puede tener URL
+      (img as any)?.thumbnailUrl,
+      (img as any)?.thumbnail,
+    ]
+    
+    for (const field of possibleUrlFields) {
+      if (field) {
+        if (typeof field === 'string' && field.trim() !== '') {
+          // Si es una URL válida (http/https) o un path, usarla
+          if (field.startsWith('http://') || field.startsWith('https://') || field.startsWith('/') || field.includes('.')) {
+            mediaUrl = field
+            console.log('[extractMedia] URL encontrada en campo:', field.substring(0, 100))
+            break
+          }
+        } else if (typeof field === 'object' && field !== null) {
+          // Si el campo es un objeto, intentar extraer URL de él
+          const objUrl = (field as any)?.url || (field as any)?.href || (field as any)?.src
+          if (objUrl && typeof objUrl === 'string') {
+            mediaUrl = objUrl
+            console.log('[extractMedia] URL extraída de objeto:', objUrl.substring(0, 100))
+            break
+          }
+        }
+      }
     }
     
-    // Si solo tenemos mediaKey, necesitamos construir la URL usando BuilderBot API
+    // Si solo tenemos mediaKey (no URL), necesitamos construir la URL usando BuilderBot API
     if (!mediaUrl && img.mediaKey) {
       // BuilderBot Cloud API puede proporcionar la URL a través de su API
       // Por ahora guardamos el mediaKey para procesarlo después
       const mediaKeyStr = typeof img.mediaKey === 'string' ? img.mediaKey : String(img.mediaKey)
       mediaUrl = `builderbot:${mediaKeyStr}`
+      console.log('[extractMedia] Usando mediaKey para construir URL:', mediaKeyStr.substring(0, 50))
+    }
+    
+    // Si aún no tenemos URL, loggear advertencia
+    if (!mediaUrl) {
+      console.warn('[extractMedia] ⚠️ No se pudo extraer URL de imagen. Estructura completa:', JSON.stringify(img).substring(0, 500))
     }
     
     // Asegurarse de que caption sea una cadena
