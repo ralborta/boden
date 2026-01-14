@@ -63,7 +63,9 @@ export async function GET(request: NextRequest) {
           console.log('[Media Proxy] ✅ Archivo descargado exitosamente, tamaño:', response.data.length, 'bytes, tipo:', contentType)
 
           // Retornar el archivo directamente (puede ser .enc o desencriptado)
-          return new NextResponse(response.data, {
+          // response.data es ArrayBuffer, convertir a Buffer
+          const buffer = Buffer.from(response.data)
+          return new NextResponse(buffer, {
             headers: {
               'Content-Type': contentType,
               'Cache-Control': 'public, max-age=3600',
@@ -103,9 +105,10 @@ export async function GET(request: NextRequest) {
           })
 
           const contentType = response.headers['content-type'] || 'application/octet-stream'
-          console.log('[Media Proxy] ✅ Archivo descargado desde URL con mediaKey, tamaño:', response.data.length, 'bytes')
+          const buffer = Buffer.from(response.data)
+          console.log('[Media Proxy] ✅ Archivo descargado desde URL con mediaKey, tamaño:', buffer.length, 'bytes')
 
-          return new NextResponse(response.data, {
+          return new NextResponse(buffer, {
             headers: {
               'Content-Type': contentType,
               'Cache-Control': 'public, max-age=3600',
@@ -147,9 +150,10 @@ export async function GET(request: NextRequest) {
               })
 
               const contentType = response.headers['content-type'] || 'image/jpeg'
-              console.log('[Media Proxy] ✅ Archivo desencriptado descargado desde BuilderBot, tamaño:', response.data.length, 'bytes, tipo:', contentType)
+              const buffer = Buffer.from(response.data)
+              console.log('[Media Proxy] ✅ Archivo desencriptado descargado desde BuilderBot, tamaño:', buffer.length, 'bytes, tipo:', contentType)
 
-              return new NextResponse(response.data, {
+              return new NextResponse(buffer, {
                 headers: {
                   'Content-Type': contentType,
                   'Cache-Control': 'public, max-age=3600',
@@ -238,7 +242,8 @@ export async function GET(request: NextRequest) {
                 
                 console.log('[Media Proxy] Content-Type final:', finalContentType)
                 
-                return new NextResponse(Buffer.from(decryptedData), {
+                // NextResponse acepta Buffer directamente
+                return new NextResponse(decryptedData, {
                   headers: {
                     'Content-Type': finalContentType,
                     'Cache-Control': 'public, max-age=3600',
@@ -286,7 +291,8 @@ export async function GET(request: NextRequest) {
             timeout: 30000,
           })
 
-          return new NextResponse(response.data, {
+          const buffer = Buffer.from(response.data)
+          return new NextResponse(buffer, {
             headers: {
               'Content-Type': response.headers['content-type'] || 'image/jpeg',
               'Cache-Control': 'public, max-age=3600',
@@ -305,7 +311,8 @@ export async function GET(request: NextRequest) {
           })
 
           if (response.status === 200) {
-            return new NextResponse(response.data, {
+            const buffer = Buffer.from(response.data)
+            return new NextResponse(buffer, {
               headers: {
                 'Content-Type': response.headers['content-type'] || 'image/jpeg',
                 'Cache-Control': 'public, max-age=3600',
