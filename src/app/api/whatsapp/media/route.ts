@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
                 
                 // Determinar content-type correcto del archivo desencriptado
                 const finalContentType = contentType.includes('octet-stream') 
-                  ? (mediaType === 'image' ? 'image/jpeg' : mediaType === 'video' ? 'video/mp4' : contentType)
+                  ? (decryptMediaType === 'image' ? 'image/jpeg' : decryptMediaType === 'video' ? 'video/mp4' : contentType)
                   : contentType
                 
                 return new NextResponse(decryptedData, {
