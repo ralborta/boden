@@ -63,9 +63,8 @@ export async function GET(request: NextRequest) {
           console.log('[Media Proxy] ✅ Archivo descargado exitosamente, tamaño:', response.data.length, 'bytes, tipo:', contentType)
 
           // Retornar el archivo directamente (puede ser .enc o desencriptado)
-          // response.data es ArrayBuffer, convertir a Buffer
-          const buffer = Buffer.from(response.data)
-          return new NextResponse(buffer, {
+          // response.data es ArrayBuffer, NextResponse acepta ArrayBuffer directamente
+          return new NextResponse(response.data, {
             headers: {
               'Content-Type': contentType,
               'Cache-Control': 'public, max-age=3600',
