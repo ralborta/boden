@@ -105,10 +105,9 @@ export async function GET(request: NextRequest) {
           })
 
           const contentType = response.headers['content-type'] || 'application/octet-stream'
-          const buffer = Buffer.from(response.data)
-          console.log('[Media Proxy] ✅ Archivo descargado desde URL con mediaKey, tamaño:', buffer.length, 'bytes')
+          console.log('[Media Proxy] ✅ Archivo descargado desde URL con mediaKey, tamaño:', response.data.byteLength, 'bytes')
 
-          return new NextResponse(buffer, {
+          return new NextResponse(response.data, {
             headers: {
               'Content-Type': contentType,
               'Cache-Control': 'public, max-age=3600',
@@ -150,10 +149,9 @@ export async function GET(request: NextRequest) {
               })
 
               const contentType = response.headers['content-type'] || 'image/jpeg'
-              const buffer = Buffer.from(response.data)
-              console.log('[Media Proxy] ✅ Archivo desencriptado descargado desde BuilderBot, tamaño:', buffer.length, 'bytes, tipo:', contentType)
+              console.log('[Media Proxy] ✅ Archivo desencriptado descargado desde BuilderBot, tamaño:', response.data.byteLength, 'bytes, tipo:', contentType)
 
-              return new NextResponse(buffer, {
+              return new NextResponse(response.data, {
                 headers: {
                   'Content-Type': contentType,
                   'Cache-Control': 'public, max-age=3600',
@@ -242,8 +240,8 @@ export async function GET(request: NextRequest) {
                 
                 console.log('[Media Proxy] Content-Type final:', finalContentType)
                 
-                // NextResponse acepta Buffer directamente
-                return new NextResponse(decryptedData, {
+                // NextResponse acepta Uint8Array/ArrayBuffer, convertir Buffer
+                return new NextResponse(new Uint8Array(decryptedData), {
                   headers: {
                     'Content-Type': finalContentType,
                     'Cache-Control': 'public, max-age=3600',
@@ -258,7 +256,7 @@ export async function GET(request: NextRequest) {
                 })
                 // Si falla la desencriptación, retornar el archivo encriptado
                 // (el navegador mostrará error pero al menos tenemos el archivo)
-                return new NextResponse(encryptedData, {
+                return new NextResponse(new Uint8Array(encryptedData), {
                   headers: {
                     'Content-Type': contentType,
                     'Cache-Control': 'public, max-age=3600',
@@ -268,7 +266,7 @@ export async function GET(request: NextRequest) {
             } else {
               // No tenemos mediaKey, retornar archivo encriptado
               console.warn('[Media Proxy] ⚠️ No hay mediaKey, retornando archivo encriptado')
-              return new NextResponse(encryptedData, {
+              return new NextResponse(new Uint8Array(encryptedData), {
                 headers: {
                   'Content-Type': contentType,
                   'Cache-Control': 'public, max-age=3600',
@@ -291,8 +289,7 @@ export async function GET(request: NextRequest) {
             timeout: 30000,
           })
 
-          const buffer = Buffer.from(response.data)
-          return new NextResponse(buffer, {
+          return new NextResponse(response.data, {
             headers: {
               'Content-Type': response.headers['content-type'] || 'image/jpeg',
               'Cache-Control': 'public, max-age=3600',
@@ -311,8 +308,7 @@ export async function GET(request: NextRequest) {
           })
 
           if (response.status === 200) {
-            const buffer = Buffer.from(response.data)
-            return new NextResponse(buffer, {
+            return new NextResponse(response.data, {
               headers: {
                 'Content-Type': response.headers['content-type'] || 'image/jpeg',
                 'Cache-Control': 'public, max-age=3600',
