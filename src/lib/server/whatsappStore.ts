@@ -317,6 +317,7 @@ async function storeMessageRedis({
   mediaType,
   mediaMimeType,
   caption,
+  mediaKey,
 }: RecordMessageInput): Promise<WhatsAppMessage | null> {
   if (!redis) return null
 
@@ -374,6 +375,7 @@ async function storeMessageRedis({
     ...(mediaType && { mediaType }),
     ...(mediaMimeType && { mediaMimeType }),
     ...(caption && { caption }),
+    ...(mediaKey && { mediaKey }),
   }
 
   // Actualizar preview: si hay media, mostrar emoji + texto o solo emoji
@@ -481,6 +483,7 @@ function storeMessageMemory({
     ...(mediaType && { mediaType }),
     ...(mediaMimeType && { mediaMimeType }),
     ...(caption && { caption }),
+    ...(mediaKey && { mediaKey }),
   }
 
   conversation.messages = [...conversation.messages, message]
