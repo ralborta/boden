@@ -912,6 +912,7 @@ function extractMedia(data: Record<string, any>): {
       mediaMimeType: img.mimetype || 'image/jpeg',
       caption: captionStr,
       mediaKey: img.mediaKey ? (typeof img.mediaKey === 'string' ? img.mediaKey : String(img.mediaKey)) : undefined,
+      thumbnailUrl: thumbnailBase64,
     }
   }
 
