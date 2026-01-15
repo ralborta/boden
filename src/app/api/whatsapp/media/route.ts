@@ -183,22 +183,59 @@ export async function GET(request: NextRequest) {
           const response = await axios.get(endpoint, {
             headers: {
               'x-api-builderbot': API_KEY,
+              'Accept': '*/*',
             },
             responseType: 'arraybuffer',
             timeout: 30000,
+            validateStatus: (status) => status < 500,
           })
 
-          const contentType = response.headers['content-type'] || 'application/octet-stream'
-          console.log('[Media Proxy] ✅ Archivo descargado desde URL con mediaKey, tamaño:', response.data.byteLength, 'bytes')
+          if (response.status === 200 && response.data) {
+            // Verificar si la respuesta es JSON (error de BuilderBot)
+            const contentType = response.headers['content-type'] || 'application/octet-stream'
+            if (contentType.includes('application/json')) {
+              const jsonData = JSON.parse(Buffer.from(response.data).toString('utf-8'))
+              console.log('[Media Proxy] BuilderBot retornó JSON en lugar de archivo:', jsonData)
+              continue
+            }
+            
+            // Verificar que el archivo tenga contenido
+            if (response.data.byteLength === 0) {
+              console.log('[Media Proxy] Archivo descargado está vacío')
+              continue
+            }
+            
+            console.log('[Media Proxy] ✅ Archivo descargado desde URL con mediaKey, tamaño:', response.data.byteLength, 'bytes')
 
-          return new NextResponse(response.data, {
-            headers: {
-              'Content-Type': contentType,
-              'Cache-Control': 'public, max-age=3600',
-            },
-          })
+            return new NextResponse(response.data, {
+              headers: {
+                'Content-Type': contentType,
+                'Cache-Control': 'public, max-age=3600',
+              },
+            })
+          } else {
+            console.log('[Media Proxy] Endpoint respondió con status:', response.status, endpoint)
+            // Si la respuesta es JSON, loggear el contenido
+            if (response.headers['content-type']?.includes('application/json')) {
+              try {
+                const jsonData = JSON.parse(Buffer.from(response.data).toString('utf-8'))
+                console.log('[Media Proxy] Respuesta JSON del endpoint:', jsonData)
+              } catch (e) {
+                // Ignorar error de parsing
+              }
+            }
+          }
         } catch (error: any) {
-          console.log('[Media Proxy] Endpoint falló:', endpoint, error.response?.status || error.message)
+          const status = error.response?.status
+          const statusText = error.response?.statusText
+          const errorData = error.response?.data
+          console.log('[Media Proxy] Endpoint falló:', {
+            endpoint,
+            status: status || 'NO STATUS',
+            statusText: statusText || 'NO STATUS TEXT',
+            message: error.message,
+            errorData: errorData ? (typeof errorData === 'string' ? errorData.substring(0, 200) : JSON.stringify(errorData).substring(0, 200)) : 'NO DATA',
+          })
         }
       }
     }
