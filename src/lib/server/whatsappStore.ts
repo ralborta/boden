@@ -435,6 +435,7 @@ function storeMessageMemory({
   mediaType,
   mediaMimeType,
   caption,
+  mediaKey,
 }: RecordMessageInput): WhatsAppMessage | null {
   const cleanText = text?.trim()
   if (!cleanText) return null
