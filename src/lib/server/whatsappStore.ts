@@ -775,14 +775,15 @@ function extractMedia(data: Record<string, any>): {
     let mediaUrl: string | undefined = undefined
     
     // Intentar extraer URL de diferentes campos posibles
+    // IMPORTANTE: WhatsApp envía URLs en img.url que son de mmg.whatsapp.net
     const possibleUrlFields = [
-      img.url,
+      img.url, // URL de WhatsApp (mmg.whatsapp.net) - PRIORITARIO
       img.directPath,
       img.mediaUrl,
-      img.mediaKey, // A veces mediaKey puede ser una URL
       (img as any)?.jpegThumbnail, // Thumbnail puede tener URL
       (img as any)?.thumbnailUrl,
       (img as any)?.thumbnail,
+      // NO incluir mediaKey aquí porque no es una URL
     ]
     
     for (const field of possibleUrlFields) {

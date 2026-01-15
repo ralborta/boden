@@ -39,45 +39,105 @@ export async function GET(request: NextRequest) {
     // BuilderBot envía archivos encriptados (.enc) que necesitan ser descargados
     if (mediaKey && !mediaUrl) {
       // Intentar múltiples endpoints posibles de BuilderBot para obtener media
+      // Codificar el mediaKey para URLs (puede contener caracteres especiales)
+      const encodedMediaKey = encodeURIComponent(mediaKey)
       const possibleEndpoints = [
+        // Endpoints con mediaKey en la URL
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media/${encodedMediaKey}`,
         `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media/${mediaKey}`,
-        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages/${messageId}/media`,
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/download/${encodedMediaKey}`,
         `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/download/${mediaKey}`,
-      ]
+        // Endpoints con messageId
+        messageId ? `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages/${messageId}/media` : null,
+        messageId ? `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages/${messageId}` : null,
+        // Endpoints alternativos
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/files/${encodedMediaKey}`,
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/files/${mediaKey}`,
+        // Endpoint con query parameter
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media?key=${encodedMediaKey}`,
+        `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/media?mediaKey=${encodedMediaKey}`,
+      ].filter(Boolean) as string[]
+      
+      console.log('[Media Proxy] Intentando descargar con mediaKey:', {
+        mediaKeyLength: mediaKey.length,
+        mediaKeyPreview: mediaKey.substring(0, 30) + '...',
+        messageId,
+        botId: BOT_ID,
+        baseUrl: BUILDERBOT_BASE_URL,
+        totalEndpoints: possibleEndpoints.length,
+      })
       
       for (const endpoint of possibleEndpoints) {
         try {
-          console.log('[Media Proxy] Intentando descargar desde:', endpoint)
+          console.log('[Media Proxy] Intentando endpoint:', endpoint)
           const response = await axios.get(endpoint, {
             headers: {
               'x-api-builderbot': API_KEY,
+              'Accept': '*/*',
             },
             responseType: 'arraybuffer',
             timeout: 30000,
+            validateStatus: (status) => status < 500, // No lanzar error para 404, etc.
           })
 
-          // Detectar tipo de contenido
-          const contentType = response.headers['content-type'] || 
-                            (response.headers['content-disposition']?.includes('image') ? 'image/jpeg' : 'application/octet-stream')
-          
-          console.log('[Media Proxy] ✅ Archivo descargado exitosamente, tamaño:', response.data.length, 'bytes, tipo:', contentType)
+          if (response.status === 200 && response.data) {
+            // Detectar tipo de contenido
+            const contentType = response.headers['content-type'] || 
+                              (response.headers['content-disposition']?.includes('image') ? 'image/jpeg' : 'application/octet-stream')
+            
+            console.log('[Media Proxy] ✅ Archivo descargado exitosamente desde:', endpoint, {
+              tamaño: response.data.byteLength,
+              tipo: contentType,
+              headers: Object.keys(response.headers),
+            })
 
-          // Retornar el archivo directamente (puede ser .enc o desencriptado)
-          // response.data es ArrayBuffer, NextResponse acepta ArrayBuffer directamente
-          return new NextResponse(response.data, {
-            headers: {
-              'Content-Type': contentType,
-              'Cache-Control': 'public, max-age=3600',
-              'Content-Disposition': `inline; filename="media"`,
-            },
-          })
+            // Retornar el archivo directamente (puede ser .enc o desencriptado)
+            return new NextResponse(response.data, {
+              headers: {
+                'Content-Type': contentType,
+                'Cache-Control': 'public, max-age=3600',
+                'Content-Disposition': `inline; filename="media"`,
+              },
+            })
+          } else {
+            console.log('[Media Proxy] Endpoint respondió con status:', response.status, endpoint)
+          }
         } catch (error: any) {
-          console.log('[Media Proxy] Endpoint falló:', endpoint, error.response?.status || error.message)
+          const status = error.response?.status
+          const statusText = error.response?.statusText
+          const errorData = error.response?.data
+          console.log('[Media Proxy] Endpoint falló:', {
+            endpoint,
+            status: status || 'NO STATUS',
+            statusText: statusText || 'NO STATUS TEXT',
+            message: error.message,
+            errorData: errorData ? (typeof errorData === 'string' ? errorData.substring(0, 200) : JSON.stringify(errorData).substring(0, 200)) : 'NO DATA',
+          })
           // Continuar con el siguiente endpoint
         }
       }
       
-      console.error('[Media Proxy] ❌ Todos los endpoints fallaron para mediaKey:', mediaKey)
+      console.error('[Media Proxy] ❌ Todos los endpoints fallaron para mediaKey:', {
+        mediaKey: mediaKey.substring(0, 50),
+        messageId,
+        botId: BOT_ID,
+        baseUrl: BUILDERBOT_BASE_URL,
+        totalEndpointsIntentados: possibleEndpoints.length,
+      })
+      
+      // Retornar error 404 con detalles
+      return NextResponse.json(
+        { 
+          error: 'No se pudo obtener el archivo desde BuilderBot',
+          details: {
+            mediaKeyLength: mediaKey.length,
+            messageId,
+            botId: BOT_ID,
+            endpointsIntentados: possibleEndpoints.length,
+          }
+        },
+        { status: 404 }
+      )
     }
     
     // Si la URL contiene "builderbot:mediaKey:", extraer el mediaKey
