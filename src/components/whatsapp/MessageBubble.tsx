@@ -124,9 +124,28 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   }
 
   const renderMedia = () => {
-    if (!hasMedia) return null
+    if (!hasMedia) {
+      console.log('[MessageBubble] No hay media:', {
+        hasMediaUrl: !!message.mediaUrl,
+        mediaUrlType: typeof message.mediaUrl,
+        mediaUrlValue: message.mediaUrl,
+        messageId: message.id,
+      })
+      return null
+    }
 
     const imageUrl = getImageUrl()
+    
+    console.log('[MessageBubble] Renderizando media:', {
+      hasMedia,
+      mediaType,
+      imageUrl: imageUrl ? imageUrl.substring(0, 150) : 'NO URL',
+      hasMediaKey: !!message.mediaKey,
+      mediaKeyLength: message.mediaKey?.length || 0,
+      messageId: message.id,
+      imageError,
+      imageLoading,
+    })
 
     if (mediaType === 'image' && !imageError && imageUrl) {
       return (
