@@ -748,6 +748,7 @@ function extractMedia(data: Record<string, any>): {
   mediaMimeType?: string
   caption?: string
   mediaKey?: string
+  thumbnailUrl?: string
 } | null {
   // Buscar imagen
   if (data.message?.imageMessage) {
