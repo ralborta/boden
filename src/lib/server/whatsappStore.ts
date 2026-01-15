@@ -782,21 +782,39 @@ function extractMedia(data: Record<string, any>): {
     let thumbnailBase64: string | undefined = undefined
     if ((img as any)?.jpegThumbnail) {
       const thumb = (img as any).jpegThumbnail
+      console.log('[extractMedia] jpegThumbnail encontrado:', {
+        type: typeof thumb,
+        isString: typeof thumb === 'string',
+        length: typeof thumb === 'string' ? thumb.length : 'N/A',
+        preview: typeof thumb === 'string' ? thumb.substring(0, 50) : 'N/A',
+        isObject: typeof thumb === 'object' && thumb !== null,
+        objectKeys: typeof thumb === 'object' && thumb !== null ? Object.keys(thumb) : [],
+      })
+      
       if (typeof thumb === 'string') {
-        // Puede ser base64 directo o un objeto con base64
-        if (thumb.startsWith('data:image') || thumb.length > 100) {
-          thumbnailBase64 = thumb
-        } else if (thumb.startsWith('/9j/')) {
-          // JPEG base64 sin prefijo
-          thumbnailBase64 = `data:image/jpeg;base64,${thumb}`
+        // WhatsApp envía jpegThumbnail como base64 puro (sin prefijo data:)
+        // Necesitamos agregar el prefijo para que el navegador lo reconozca
+        if (thumb.length > 50) {
+          // Si es base64 puro, agregar prefijo
+          if (!thumb.startsWith('data:')) {
+            thumbnailBase64 = `data:image/jpeg;base64,${thumb}`
+          } else {
+            thumbnailBase64 = thumb
+          }
+          console.log('[extractMedia] ✅ Thumbnail base64 extraído, longitud:', thumbnailBase64.length)
         }
       } else if (typeof thumb === 'object' && thumb !== null) {
         // Puede ser un objeto con la propiedad base64
-        thumbnailBase64 = (thumb as any)?.base64 || (thumb as any)?.data
-        if (thumbnailBase64 && !thumbnailBase64.startsWith('data:')) {
-          thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBase64}`
+        thumbnailBase64 = (thumb as any)?.base64 || (thumb as any)?.data || (thumb as any)?.url
+        if (thumbnailBase64 && typeof thumbnailBase64 === 'string') {
+          if (!thumbnailBase64.startsWith('data:') && thumbnailBase64.length > 50) {
+            thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBase64}`
+          }
+          console.log('[extractMedia] ✅ Thumbnail extraído de objeto, longitud:', thumbnailBase64.length)
         }
       }
+    } else {
+      console.log('[extractMedia] ⚠️ No se encontró jpegThumbnail en imageMessage')
     }
     
     // Intentar extraer URL de diferentes campos posibles

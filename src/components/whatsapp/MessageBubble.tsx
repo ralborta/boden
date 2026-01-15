@@ -149,14 +149,26 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
     // Si no hay URL pero hay thumbnail (base64), mostrarlo directamente
     if (mediaType === 'image' && !imageUrl && message.thumbnailUrl) {
+      console.log('[MessageBubble] Mostrando thumbnail:', {
+        thumbnailLength: message.thumbnailUrl.length,
+        thumbnailPreview: message.thumbnailUrl.substring(0, 50),
+        hasCaption: !!message.caption,
+      })
       return (
         <div className="mb-2 rounded-xl overflow-hidden relative">
           <img
             src={message.thumbnailUrl}
             alt={message.caption || 'Imagen'}
             className="w-full max-w-md h-auto object-cover rounded-xl"
-            onError={() => {
-              console.error('[MessageBubble] Error cargando thumbnail')
+            onLoad={() => {
+              console.log('[MessageBubble] ✅ Thumbnail cargado exitosamente')
+            }}
+            onError={(e) => {
+              console.error('[MessageBubble] ❌ Error cargando thumbnail:', {
+                thumbnailLength: message.thumbnailUrl?.length,
+                thumbnailPreview: message.thumbnailUrl?.substring(0, 50),
+                error: e,
+              })
             }}
           />
           {message.caption && (
