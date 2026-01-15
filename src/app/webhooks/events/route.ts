@@ -12,12 +12,22 @@ export async function POST(req: NextRequest) {
     
     // Log detallado para debugging de imágenes
     if (body?.data?.message?.imageMessage || body?.data?.message?.videoMessage || body?.data?.message?.documentMessage) {
+      const img = body.data.message.imageMessage
       console.log('🖼️ [WEBHOOK DEBUG] Media detectado en webhook:', {
-        hasImageMessage: !!body.data.message.imageMessage,
+        hasImageMessage: !!img,
         hasVideoMessage: !!body.data.message.videoMessage,
         hasDocumentMessage: !!body.data.message.documentMessage,
-        imageMessageKeys: body.data.message.imageMessage ? Object.keys(body.data.message.imageMessage) : [],
-        imageMessageStructure: body.data.message.imageMessage ? JSON.stringify(body.data.message.imageMessage).substring(0, 500) : null,
+        imageMessageKeys: img ? Object.keys(img) : [],
+        // Log crítico: verificar si hay URL de WhatsApp
+        hasUrl: !!img?.url,
+        urlValue: img?.url ? img.url.substring(0, 200) : 'NO URL',
+        urlType: typeof img?.url,
+        hasMediaKey: !!img?.mediaKey,
+        mediaKeyValue: img?.mediaKey ? img.mediaKey.substring(0, 50) + '...' : 'NO MEDIAKEY',
+        hasDirectPath: !!img?.directPath,
+        directPathValue: img?.directPath ? img.directPath.substring(0, 200) : 'NO DIRECTPATH',
+        // Estructura completa para debugging
+        imageMessageStructure: img ? JSON.stringify(img).substring(0, 1000) : null,
       })
     }
 
