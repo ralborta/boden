@@ -147,6 +147,24 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       imageLoading,
     })
 
+    // Si no hay URL pero hay mediaKey, mostrar placeholder
+    if (mediaType === 'image' && !imageUrl && message.mediaKey) {
+      return (
+        <div className="mb-2 rounded-xl overflow-hidden relative bg-gray-100 border-2 border-dashed border-gray-300 p-8">
+          <div className="flex flex-col items-center justify-center text-center">
+            <ImageIcon className="w-12 h-12 text-gray-400 mb-2" />
+            <p className="text-sm text-gray-600 font-medium">Imagen no disponible</p>
+            <p className="text-xs text-gray-500 mt-1">
+              BuilderBot no proporcionó la URL de la imagen
+            </p>
+            {message.caption && (
+              <p className="text-sm text-gray-700 mt-3 italic">"{message.caption}"</p>
+            )}
+          </div>
+        </div>
+      )
+    }
+
     if (mediaType === 'image' && !imageError && imageUrl) {
       return (
         <div className="mb-2 rounded-xl overflow-hidden relative">
