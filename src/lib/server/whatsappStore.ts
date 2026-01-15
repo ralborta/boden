@@ -318,6 +318,7 @@ async function storeMessageRedis({
   mediaMimeType,
   caption,
   mediaKey,
+  thumbnailUrl,
 }: RecordMessageInput): Promise<WhatsAppMessage | null> {
   if (!redis) return null
 
