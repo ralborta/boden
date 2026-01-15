@@ -147,8 +147,27 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       imageLoading,
     })
 
-    // Si no hay URL pero hay mediaKey, mostrar placeholder
-    if (mediaType === 'image' && !imageUrl && message.mediaKey) {
+    // Si no hay URL pero hay thumbnail (base64), mostrarlo directamente
+    if (mediaType === 'image' && !imageUrl && message.thumbnailUrl) {
+      return (
+        <div className="mb-2 rounded-xl overflow-hidden relative">
+          <img
+            src={message.thumbnailUrl}
+            alt={message.caption || 'Imagen'}
+            className="w-full max-w-md h-auto object-cover rounded-xl"
+            onError={() => {
+              console.error('[MessageBubble] Error cargando thumbnail')
+            }}
+          />
+          {message.caption && (
+            <p className="text-sm text-gray-600 mt-2 px-2">{message.caption}</p>
+          )}
+        </div>
+      )
+    }
+
+    // Si no hay URL ni thumbnail pero hay mediaKey, mostrar placeholder
+    if (mediaType === 'image' && !imageUrl && !message.thumbnailUrl && message.mediaKey) {
       return (
         <div className="mb-2 rounded-xl overflow-hidden relative bg-gray-100 border-2 border-dashed border-gray-300 p-8">
           <div className="flex flex-col items-center justify-center text-center">

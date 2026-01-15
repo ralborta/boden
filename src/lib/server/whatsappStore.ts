@@ -774,15 +774,37 @@ function extractMedia(data: Record<string, any>): {
     // Asegurarse de que siempre sea una cadena
     let mediaUrl: string | undefined = undefined
     
+    // IMPORTANTE: WhatsApp incluye jpegThumbnail como base64 que podemos mostrar directamente
+    // Este es el preview de la imagen que WhatsApp envía en el webhook
+    let thumbnailBase64: string | undefined = undefined
+    if ((img as any)?.jpegThumbnail) {
+      const thumb = (img as any).jpegThumbnail
+      if (typeof thumb === 'string') {
+        // Puede ser base64 directo o un objeto con base64
+        if (thumb.startsWith('data:image') || thumb.length > 100) {
+          thumbnailBase64 = thumb
+        } else if (thumb.startsWith('/9j/')) {
+          // JPEG base64 sin prefijo
+          thumbnailBase64 = `data:image/jpeg;base64,${thumb}`
+        }
+      } else if (typeof thumb === 'object' && thumb !== null) {
+        // Puede ser un objeto con la propiedad base64
+        thumbnailBase64 = (thumb as any)?.base64 || (thumb as any)?.data
+        if (thumbnailBase64 && !thumbnailBase64.startsWith('data:')) {
+          thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBase64}`
+        }
+      }
+    }
+    
     // Intentar extraer URL de diferentes campos posibles
     // IMPORTANTE: WhatsApp envía URLs en img.url que son de mmg.whatsapp.net
     const possibleUrlFields = [
       img.url, // URL de WhatsApp (mmg.whatsapp.net) - PRIORITARIO
       img.directPath,
       img.mediaUrl,
-      (img as any)?.jpegThumbnail, // Thumbnail puede tener URL
       (img as any)?.thumbnailUrl,
       (img as any)?.thumbnail,
+      // NO incluir jpegThumbnail aquí porque lo manejamos por separado
       // NO incluir mediaKey aquí porque no es una URL
     ]
     
@@ -1065,6 +1087,7 @@ export async function ingestBuilderbotEvent(event: BuilderbotEvent) {
     mediaMimeType: media?.mediaMimeType,
     caption: media?.caption,
     mediaKey: media?.mediaKey,
+    thumbnailUrl: media?.thumbnailUrl,
   })
 
   if (storedMessage) {

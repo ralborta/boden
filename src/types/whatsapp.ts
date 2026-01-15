@@ -24,5 +24,6 @@ export type WhatsAppMessage = {
   mediaMimeType?: string // ej: 'image/jpeg', 'video/mp4'
   caption?: string // Texto que acompaña a la imagen
   mediaKey?: string // Clave de media para descargar desde WhatsApp API
+  thumbnailUrl?: string // URL del thumbnail/preview de la imagen (base64 o URL)
 }
 
